@@ -87,7 +87,7 @@ This separation allows new integrations and node types to be introduced without 
 | Workflow Editor | Vue Flow |
 | Backend | Python, FastAPI |
 | Database | PostgreSQL |
-| ORM | SQLAlchemy |
+| ORM | SQLModel (built on SQLAlchemy + Pydantic) |
 | Background Processing | Celery |
 | Message Broker | Redis |
 | Validation | Pydantic |
