@@ -2,7 +2,7 @@
 
 Checklist tracking implementation progress. Build order follows `IMPLEMENTATION_PLAN.md`. Tick items as they're done.
 
-_Last updated: 2026-11-26 (Steps 1–3 complete, project scope expanded to multi-tenant SaaS automation platform)_
+_Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi-tenant SaaS automation platform)_
 
 ---
 
@@ -31,17 +31,21 @@ _Last updated: 2026-11-26 (Steps 1–3 complete, project scope expanded to multi
 - [x] Swagger docs disabled in production
 - [x] 21 backend tests, 6 frontend tests — all passing
 
-### Step 4: Custom Roles and Permissions (next)
+### Step 4: Custom Roles and Permissions (done)
 
-Extend workspace roles to support custom roles with granular permissions.
-
-- [ ] Role model (id, workspace_id, name, is_system, permissions JSONB)
-- [ ] System roles seeded on workspace creation (admin, member)
-- [ ] Custom role CRUD API (workspace-scoped, admin-only)
-- [ ] Permission checking utility (check user's effective permissions against required permission)
-- [ ] Folder and tag fields on workflows for permission scoping
-- [ ] Refactor existing workspace role enforcement to use new Role model
-- [ ] Migration and tests
+- [x] Role model with `full_access` flag (no hardcoded UUIDs or name-based identity)
+- [x] System roles seeded via migration (admin: `full_access=True`, member: restricted JSONB)
+- [x] Permission-based auth via FastAPI dependency classes (`PermissionRequired`, `WorkspaceMemberRequired`)
+- [x] Routes declare permissions on the decorator, not in function body
+- [x] Custom role CRUD API (workspace-scoped, permission-gated): list, create, get, update, delete
+- [x] Permission checking: `full_access` bypass, resource/action/scope resolution from JSONB
+- [x] Dynamic roles: any role with the right permission can perform the action (not role-name-locked)
+- [x] Owner protection via `workspace.owner_user_id` (not role checks)
+- [x] WorkspaceMembership migrated from role enum to role_id FK
+- [x] Unique constraint on `(workspace_id, name)` for role names
+- [x] Split routes: workspaces.py, members.py, roles.py
+- [x] 38 backend tests passing
+- [ ] Folder and tag fields on workflows for permission scoping (deferred to Step 5: Workflow Storage)
 
 ### Step 5: Workflow Storage
 

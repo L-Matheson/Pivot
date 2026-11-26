@@ -6,12 +6,14 @@ from typing import Annotated
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from app.core.db import SessionDep
+from app.core.permissions import check_permission
 from app.core.security import decode_token
+from app.models.role import Role
 from app.models.user import User
-from app.models.workspace import WorkspaceMembership, WorkspaceRole
+from app.models.workspace import WorkspaceMembership
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -20,7 +22,6 @@ def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     session: SessionDep,
 ) -> User:
-    """Extract and validate the current user from the JWT Bearer token."""
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,15 +81,9 @@ def get_current_user(
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
-ROLE_HIERARCHY: dict[WorkspaceRole, int] = {
-    WorkspaceRole.viewer: 1,
-    WorkspaceRole.editor: 2,
-    WorkspaceRole.owner: 3,
-}
 
-
-def get_membership(
-    session: Session,
+def _get_membership(
+    session: SessionDep,
     workspace_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> WorkspaceMembership | None:
@@ -100,31 +95,63 @@ def get_membership(
     ).first()
 
 
-def require_workspace_role(
-    session: Session,
-    workspace_id: uuid.UUID,
-    user: User,
-    minimum_role: WorkspaceRole,
-) -> WorkspaceMembership:
-    """Assert the user has at least `minimum_role` in the workspace.
-
-    Returns 404 for non-members to avoid leaking workspace existence.
-    """
-    membership = get_membership(session, workspace_id, user.id)
-
-    if membership is None:
+def _get_member_role(session: SessionDep, membership: WorkspaceMembership) -> Role:
+    role = session.get(Role, membership.role_id)
+    if role is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role not found for membership.",
         )
+    return role
 
-    user_level = ROLE_HIERARCHY[membership.role]
-    required_level = ROLE_HIERARCHY[minimum_role]
 
-    if user_level < required_level:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Requires '{minimum_role.value}' role or higher.",
-        )
+class WorkspaceMemberRequired:
+    """Validates the caller is a member of the workspace."""
 
-    return membership
+    def __call__(
+        self,
+        workspace_id: uuid.UUID,
+        session: SessionDep,
+        user: CurrentUserDep,
+    ) -> tuple[WorkspaceMembership, Role]:
+        membership = _get_membership(session, workspace_id, user.id)
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found.",
+            )
+        role = _get_member_role(session, membership)
+        return membership, role
+
+
+class PermissionRequired:
+    """Validates the caller has a specific permission in the workspace."""
+
+    def __init__(self, resource: str, action: str):
+        self.resource = resource
+        self.action = action
+
+    def __call__(
+        self,
+        workspace_id: uuid.UUID,
+        session: SessionDep,
+        user: CurrentUserDep,
+    ) -> tuple[WorkspaceMembership, Role]:
+        membership = _get_membership(session, workspace_id, user.id)
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found.",
+            )
+        role = _get_member_role(session, membership)
+        if not check_permission(role, self.resource, self.action):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing permission: {self.resource}.{self.action}",
+            )
+        return membership, role
+
+
+WorkspaceMemberDep = Annotated[
+    tuple[WorkspaceMembership, Role], Depends(WorkspaceMemberRequired())
+]

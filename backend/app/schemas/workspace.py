@@ -4,8 +4,6 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from app.models.workspace import WorkspaceRole
-
 
 class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
@@ -29,15 +27,16 @@ class WorkspaceRead(BaseModel):
 
 class MemberAdd(BaseModel):
     email: str
-    role: WorkspaceRole
+    role_id: uuid.UUID
 
 
 class MemberUpdate(BaseModel):
-    role: WorkspaceRole
+    role_id: uuid.UUID
 
 
 class MemberRead(BaseModel):
     user_id: uuid.UUID
     email: str
     display_name: str
-    role: WorkspaceRole
+    role_id: uuid.UUID
+    role_name: str
