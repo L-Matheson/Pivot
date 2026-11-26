@@ -19,10 +19,10 @@ _Last updated: 2026-11-25_
 
 These deliverables are still missing:
 
-- [ ] Install **Docker Desktop**, which Docker Compose needs.
-- [ ] Write `docker-compose.yml` with services `frontend`, `backend`, `postgres`, `redis` and `celery-worker`. Add `celery-beat` later.
-- [ ] Add a `backend/Dockerfile` (uv-based) and a `frontend/Dockerfile`.
-- [ ] Add a `.env.example` listing every `PIVOT_*` variable, including the future `PIVOT_DATABASE_URL` and `PIVOT_REDIS_URL`.
+- [x] Install **Docker Desktop**, which Docker Compose needs.
+- [x] Write `docker-compose.yml` with services `frontend`, `backend`, `postgres`, `redis` and `celery-worker`. Add `celery-beat` later.
+- [x] Add a `backend/Dockerfile` (uv-based) and a `frontend/Dockerfile`. _Done as `docker/backend.Dockerfile` and `docker/frontend.Dockerfile`; `celery-worker` is added in the Celery step._
+- [x] Add a `.env.example` listing every `PIVOT_*` variable, including the future `PIVOT_DATABASE_URL` and `PIVOT_REDIS_URL`.
 - [ ] Add README setup instructions: `uv sync`, `npm install`, `docker compose up`.
 
 Acceptance: Postgres and Redis start, `GET /api/health` returns ok, the frontend loads, and everything runs in Docker.

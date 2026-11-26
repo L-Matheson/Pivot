@@ -172,3 +172,14 @@ Contributions, feature suggestions, and discussions are welcome.
 
 **Pivot**  
 *Build workflows. Connect systems. Automate processes.*
+
+## Quickstart (local development)
+
+Requires Docker Desktop and Node.
+
+```sh
+npm run up      # starts Postgres, Redis, backend (:8000) and frontend (:5173) with hot reload
+npm run down    # stops everything (data is kept; `npm run reset` wipes it)
+```
+
+See `CLAUDE.md` for the full command list (tests, lint, database migrations).

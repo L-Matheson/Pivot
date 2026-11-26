@@ -4,9 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. There is no database, Celery, Docker, or auth yet. Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
+Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. Docker Compose runs the dev stack (Postgres, Redis, backend, frontend). There is no database schema, Celery, or auth yet. Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
 
 ## Commands
+
+**Whole stack (preferred), run from the repo root.** Needs Docker; `.env` is auto-created from `.env.example`.
+
+```sh
+npm run up           # build + start postgres, redis, backend (:8000), frontend (:5173) with hot reload
+npm run up:d         # same, detached and waits until healthy
+npm run down         # stop (data kept); npm run reset also wipes volumes
+npm run logs | ps | restart
+npm run infra        # only postgres + redis, to run backend/frontend natively as below
+npm test             # backend pytest + frontend vitest in containers; also lint, format, typecheck
+npm run db:revision -- "message"   # autogenerate Alembic migration; db:migrate, db:downgrade, db:current, db:check, db:psql, db:reset
+```
+
+`npm run up` applies migrations automatically via the one-shot `migrate` service, which activates once `backend/alembic.ini` exists. If a local Postgres already owns port 5432, set `POSTGRES_PORT` in `.env`.
+
+Running natively instead:
 
 Backend (run from `backend/`, managed with uv; add deps with `uv add <pkg>` / `uv add --dev <pkg>`, never hand-edit `uv.lock`):
 

@@ -1,0 +1,31 @@
+{
+  "name": "pivot",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "up": "node scripts/compose.mjs up --build",
+    "up:d": "node scripts/compose.mjs up -d --build --wait",
+    "down": "node scripts/compose.mjs down",
+    "restart": "node scripts/compose.mjs restart",
+    "reset": "node scripts/compose.mjs down -v",
+    "logs": "node scripts/compose.mjs logs -f --tail=100",
+    "ps": "node scripts/compose.mjs ps",
+    "infra": "node scripts/compose.mjs up -d --wait postgres redis",
+    "shell:backend": "node scripts/compose.mjs run --rm backend sh",
+    "shell:frontend": "node scripts/compose.mjs run --rm frontend sh",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "node scripts/compose.mjs run --rm --no-deps backend sh -c \"uv sync --frozen && uv run python -m pytest\"",
+    "test:frontend": "node scripts/compose.mjs run --rm --no-deps frontend sh -c \"npm ci && npm test\"",
+    "lint": "node scripts/compose.mjs run --rm --no-deps backend sh -c \"uv sync --frozen && uv run ruff check . && uv run ruff format --check .\"",
+    "format": "node scripts/compose.mjs run --rm --no-deps backend sh -c \"uv sync --frozen && uv run ruff format .\"",
+    "typecheck": "node scripts/compose.mjs run --rm --no-deps frontend sh -c \"npm ci && npm run typecheck\"",
+    "db:migrate": "node scripts/compose.mjs run --rm migrate",
+    "db:revision": "node scripts/compose.mjs run --rm backend uv run alembic revision --autogenerate -m",
+    "db:downgrade": "node scripts/compose.mjs run --rm backend uv run alembic downgrade -1",
+    "db:current": "node scripts/compose.mjs run --rm backend uv run alembic current",
+    "db:history": "node scripts/compose.mjs run --rm backend uv run alembic history",
+    "db:check": "node scripts/compose.mjs run --rm backend uv run alembic check",
+    "db:psql": "node scripts/compose.mjs exec postgres psql -U pivot -d pivot",
+    "db:reset": "node scripts/compose.mjs down -v && node scripts/compose.mjs up -d --build --wait"
+  }
+}
