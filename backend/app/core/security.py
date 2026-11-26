@@ -25,6 +25,8 @@ def create_access_token(user_id: str) -> str:
         "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
         "type": "access",
         "iat": now,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
@@ -36,9 +38,17 @@ def create_refresh_token(user_id: str) -> str:
         "exp": now + timedelta(days=settings.refresh_token_expire_days),
         "type": "refresh",
         "iat": now,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+    return jwt.decode(
+        token,
+        settings.secret_key,
+        algorithms=[settings.jwt_algorithm],
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+    )

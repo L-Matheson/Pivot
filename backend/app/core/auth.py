@@ -58,7 +58,16 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = session.get(User, uuid.UUID(user_id))
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+    user = session.get(User, user_uuid)
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,5 +1,9 @@
 """Shared test fixtures."""
 
+import os
+
+os.environ.setdefault("PIVOT_DEBUG", "true")
+
 from unittest.mock import MagicMock
 
 import pytest

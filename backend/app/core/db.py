@@ -10,7 +10,7 @@ from sqlmodel import Session, create_engine
 
 from app.core.config import settings
 
-
+# ensure db is only created once per process
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
     return create_engine(str(settings.database_url), echo=settings.debug)

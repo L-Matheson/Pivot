@@ -125,6 +125,8 @@ def test_me_expired_token(client: TestClient) -> None:
     with patch("app.core.security.settings") as mock_settings:
         mock_settings.secret_key = "change-me-in-production-use-a-random-secret"
         mock_settings.jwt_algorithm = "HS256"
+        mock_settings.jwt_issuer = "pivot"
+        mock_settings.jwt_audience = "pivot"
         mock_settings.access_token_expire_minutes = -1
         token = create_access_token(str(uuid.uuid4()))
 
