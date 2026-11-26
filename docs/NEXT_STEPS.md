@@ -1,88 +1,180 @@
 # Next Steps
 
-A checklist of the things you need to do yourself. The build order follows `IMPLEMENTATION_PLAN.md` §17. Tick items off as they're done.
+Checklist tracking implementation progress. Build order follows `IMPLEMENTATION_PLAN.md`. Tick items as they're done.
 
-_Last updated: 2026-11-25 (Steps 1–3 complete)_
+_Last updated: 2026-11-26 (Steps 1–3 complete, project scope expanded to multi-tenant SaaS automation platform)_
 
-## 1. Housekeeping (now)
+---
 
-- [ ] **Link the package-bundled agent skills.** Run this yourself from `backend/`: `uvx library-skills` (add `--claude` to also manage `.claude/skills`). It should find the `fastapi` and `typer` skills.
-- [x] First commit made (`docker added`). `backend/uv.lock` is tracked; `.venv/` and `.env` are ignored.
-- [x] Stray root `package-lock.json` is gone. The root `package.json` now only holds the Docker convenience scripts (no dependencies, no workspaces).
-- [ ] **Optional: pin the Python version.** `pyproject.toml` requires `>=3.12` and the Docker image uses 3.12. Run `uv python pin 3.12` in `backend/` so native runs match.
-- [ ] **Optional: unblock `pytest.exe`.** Windows Application Control blocks it on this machine. Use `python -m pytest` natively, or `npm test` (runs in Docker, unaffected).
+## Phase 1: Core Platform
 
-## 2. Step 1: Repository Foundation (done)
+### Step 1: Repository Foundation (done)
 
-- [x] Docker Desktop installed.
-- [x] `docker-compose.yml` with `postgres`, `redis`, `backend`, `frontend` and a one-shot `migrate` (profile `db`, auto-enabled once `backend/alembic.ini` exists). `celery-worker` is added in the Celery step; `celery-beat` only once scheduling exists.
-- [x] `docker/backend.Dockerfile` and `docker/frontend.Dockerfile`.
-- [x] `.env.example`; `npm run up` creates `.env` automatically.
-- [x] README quickstart (`npm run up` / `npm run down`); full command list in `CLAUDE.md`.
-- [x] Verified: `npm run up:d` healthy, `/api/health` ok directly and through the Vite proxy, `npm test`, `npm run lint`, `npm run typecheck` pass in containers.
+- [x] Docker Compose with postgres, redis, backend, frontend, migrate services
+- [x] Dockerfiles, .env.example, npm convenience scripts
+- [x] Verified: health endpoint, Vite proxy, tests pass in containers
 
-**Daily use:** `npm run up` starts everything; `npm run infra` starts only Postgres and Redis for native runs. If a local Postgres uses port 5432, set `POSTGRES_PORT` in `.env`.
+### Step 2: Database and Migrations (done)
 
-## 3. Step 2: Database and Migrations (done)
+- [x] SQLModel + Alembic set up with auto-migrations
+- [x] Lazy engine, get_session dependency, SessionDep alias
+- [x] Base model field factories (id_field, created_at_field, updated_at_field)
+- [x] Health endpoint with live DB check
 
-- [x] `uv add alembic "psycopg[binary]"`.
-- [x] `app/core/db.py` with lazy engine, `get_session` dependency, and `SessionDep` alias.
-- [x] `app/core/config.py` now has `database_url` (PostgresDsn), `redis_url`, and `debug` settings.
-- [x] `alembic init` done; `alembic/env.py` reads `PIVOT_DATABASE_URL` and uses `SQLModel.metadata`.
-- [x] Initial empty baseline migration generated and applied.
-- [x] `npm run up` auto-runs `alembic upgrade head` via the `migrate` service (activates when `alembic.ini` exists).
-- [x] `/api/health` now returns `{"status":"ok","database":"ok"}` with a live DB check.
-- [x] `app/models/` package created with `base.py` (shared field factories). Import new model files in `__init__.py`.
-- [x] Tests use mock sessions natively; real Postgres runs in Docker via `npm run test:backend`.
-- [x] Ruff per-file ignores for Alembic env/migration files; ruff post-write hook formats generated migrations.
-- [ ] Dev seed mechanism (deferred to Step 3 when User/Workspace models exist).
+### Step 3: Authentication and Workspaces (done)
 
-**Note:** Windows Application Control blocks `alembic.exe` and `pytest.exe`. Use `uv run python -m pytest` natively, or `npm run test:backend` in Docker. Alembic commands are wrapped by `npm run db:*` scripts which run in Docker.
+- [x] User model with bcrypt password hashing
+- [x] Workspace and WorkspaceMembership models (owner/editor/viewer)
+- [x] JWT auth with issuer/audience validation, production secret enforcement
+- [x] Auth API (register, login, refresh, /me)
+- [x] Workspace CRUD + membership management
+- [x] Swagger docs disabled in production
+- [x] 21 backend tests, 6 frontend tests — all passing
 
-## 4. Step 3: Authentication and Workspaces (done)
+### Step 4: Custom Roles and Permissions (next)
 
-Decisions settled: **JWT** auth, **workspace-role-only** permissions (owner/editor/viewer).
+Extend workspace roles to support custom roles with granular permissions.
 
-- [x] User model (`app/models/user.py`) with bcrypt password hashing.
-- [x] Workspace and WorkspaceMembership models (`app/models/workspace.py`) with `WorkspaceRole` enum.
-- [x] Auth utilities: `app/core/security.py` (password hashing, JWT creation/verification), `app/core/auth.py` (FastAPI dependencies: `CurrentUserDep`, `require_workspace_role`).
-- [x] Auth API (`app/api/auth.py`): register, login, refresh, /me.
-- [x] Workspace API (`app/api/workspaces.py`): CRUD + membership management (add/update/remove members).
-- [x] Alembic migration for `user`, `workspace`, `workspacemembership` tables.
-- [x] Auth settings in config: `PIVOT_SECRET_KEY`, `PIVOT_JWT_ALGORITHM`, `PIVOT_ACCESS_TOKEN_EXPIRE_MINUTES`, `PIVOT_REFRESH_TOKEN_EXPIRE_DAYS`.
-- [x] 21 tests (11 auth, 2 health, 8 workspace/permissions). All pass natively and in Docker.
-- [x] End-to-end verified: register → login → /me → create workspace → list workspaces → 401 on no-token.
-- [ ] Dev seed script (create a default user + workspace for local dev).
-- [ ] `PIVOT_SECRET_KEY` must be changed in production (default is a placeholder).
-
-## 5. Step 4: Workflow Storage (next)
-
-Requires settling one decision from §20 first:
-- **Workflow graph storage:** JSON-only / normalized tables / hybrid
-
-Deliverables:
-- [ ] Workflow Pydantic models (definition schema with `schema_version`, `nodes[]`, `edges[]`)
-- [ ] SQLModel Workflow table
-- [ ] CRUD API: list, create, read, update, archive, duplicate, import, export
-- [ ] Workflow schema validation (reject cycles, validate node types)
-- [ ] Frontend workflow service (`src/services/`)
+- [ ] Role model (id, workspace_id, name, is_system, permissions JSONB)
+- [ ] System roles seeded on workspace creation (admin, member)
+- [ ] Custom role CRUD API (workspace-scoped, admin-only)
+- [ ] Permission checking utility (check user's effective permissions against required permission)
+- [ ] Folder and tag fields on workflows for permission scoping
+- [ ] Refactor existing workspace role enforcement to use new Role model
 - [ ] Migration and tests
 
-## 6. Decisions you need to make (plan §20)
+### Step 5: Workflow Storage
 
-Settle each one before its step starts:
+- [ ] Workflow Pydantic models (definition schema: schema_version, nodes, edges)
+- [ ] SQLModel Workflow table (workspace_id, name, description, folder, tags, definition JSONB)
+- [ ] CRUD API: list (permission-filtered), create, read, update, archive, duplicate, import, export
+- [ ] Workflow schema validation (reject cycles, validate node types against registry)
+- [ ] Migration and tests
 
-| Decision | Needed before | Options | Status |
-|---|---|---|---|
-| Authentication strategy | Step 3 | JWT / cookie sessions / external IdP | ✅ JWT |
-| Permission model | Step 3 | Workspace role only / per-workflow / both | ✅ Workspace role only |
-| Workflow graph storage | Step 4 (workflow storage) | JSON-only / normalized nodes and edges tables / hybrid | **decide next** |
-| Execution data storage | Step 6 (execution persistence) | Postgres only / plus Redis cache / plus object storage for large outputs | |
-| First HTTP node behavior | Step 5 (node registry) | Basic request/response / headers and auth / credentials and secret references | |
-| Frontend editor scope | Step 8 (editor) | Full palette / small first palette / schema-generated forms | |
-| Real-time monitoring | Step 9 (monitoring UI) | Polling first (the plan's default) / WebSockets from the start | |
-| Frontend package manager | Any time | npm (current) / pnpm | |
+### Step 6: Connection Infrastructure
 
-## 7. Later steps (for reference)
+- [ ] Connection model (workspace_id, provider, auth_type, credentials_encrypted)
+- [ ] PIVOT_ENCRYPTION_KEY setting and encryption utilities
+- [ ] Connector registry (provider definitions with auth config)
+- [ ] Connection CRUD API (create, list, test, delete — credentials never returned)
+- [ ] OAuth2 flow: authorize URL endpoint, callback handler, token refresh
+- [ ] API key and connection string storage (encrypted)
+- [ ] Google OAuth connector (Gmail + Sheets) — first provider
+- [ ] Migration and tests
 
-Step 4 workflow storage, Step 5 node registry, Step 6 execution persistence, Step 7 Celery workers, Step 8 Vue Flow editor, Step 9 monitoring UI and Step 10 the vertical-slice test. Docs and CI hardening follow.
+---
+
+## Phase 2: Execution Engine
+
+### Step 7: Node Registry and Engine
+
+- [ ] Node registry with Pydantic config/input/output models per type
+- [ ] Node metadata API (`/api/nodes`)
+- [ ] Node executors: manual_trigger, email_trigger, http_request, send_email, write_spreadsheet, send_notification, transform, condition
+- [ ] Topological dependency resolution and cycle detection
+- [ ] Branching execution (if/else, parallel)
+- [ ] Data propagation between nodes
+- [ ] Tests (mocked external calls)
+
+### Step 8: Execution Persistence
+
+- [ ] WorkflowExecution and NodeExecution models
+- [ ] Execution CRUD API (create, list, detail — permission-filtered)
+- [ ] Status management (queued → running → succeeded/failed)
+- [ ] Node-level input/output/error storage
+- [ ] Retry and cancellation
+- [ ] Migration and tests
+
+### Step 9: Celery Workers and Triggers
+
+- [ ] Celery app config with Redis broker
+- [ ] Workflow execution Celery task
+- [ ] celery-worker Docker service
+- [ ] celery-beat for scheduled/polling triggers
+- [ ] Email trigger (poll Gmail for labeled messages)
+- [ ] Schedule trigger (cron expressions)
+- [ ] API poll trigger (website/endpoint monitoring with change detection)
+- [ ] Tests
+
+---
+
+## Phase 3: Frontend
+
+### Step 10: Theming Infrastructure
+
+- [ ] CSS custom property system (all colors from variables)
+- [ ] Theme provider composable (reads workspace theme_config)
+- [ ] Light and dark mode
+- [ ] Theme settings API (admin-only)
+- [ ] Color picker in workspace settings
+
+### Step 11: Auth and Workspace UI
+
+- [ ] Login and registration pages
+- [ ] Workspace selector
+- [ ] Workspace settings (name, theme, roles)
+- [ ] Member management (invite, assign roles)
+- [ ] Custom role editor
+- [ ] Vue Router with auth guards, Pinia stores
+
+### Step 12: Visual Workflow Editor
+
+- [ ] Workflow list page (filtered by permissions)
+- [ ] Editor canvas (Vue Flow) with pan/zoom
+- [ ] Node palette sidebar (from backend registry)
+- [ ] Drag-and-drop, edge creation/deletion
+- [ ] Node config forms (auto-generated from schema)
+- [ ] Connection selector in node config
+- [ ] Branching visualization
+- [ ] Save/load, unsaved-change indicator
+
+### Step 13: Execution Monitoring UI
+
+- [ ] Run workflow action
+- [ ] Execution list and detail pages
+- [ ] Node status display and input/output inspector
+- [ ] Error display, polling for updates
+
+---
+
+## Phase 4: Dashboards and Polish
+
+### Step 14: Stats Dashboards
+
+- [ ] Workflow stats (execution counts, success rates, durations)
+- [ ] Execution analytics (trends, failure categories)
+- [ ] Admin platform stats (connections, users, storage)
+- [ ] Audit log viewer
+
+### Step 15: Connections UI
+
+- [ ] Connections page (list, status indicators)
+- [ ] OAuth connect flow (Google, Slack, Microsoft)
+- [ ] API key and connection string forms
+- [ ] Connection test and usage display
+
+### Step 16: Documentation and CI/CD
+
+- [ ] Setup guide, env var reference
+- [ ] Connector and node development guides
+- [ ] GitHub Actions CI
+- [ ] Production deployment guide
+
+---
+
+## Decisions
+
+| Decision | Status | Choice |
+|---|---|---|
+| Authentication | ✅ | JWT (access + refresh) |
+| Permission model | ✅ | System roles (admin/member) + custom roles, folder/tag scoping |
+| Deployment model | ✅ | Multi-tenant SaaS |
+| Integration auth | ✅ | OAuth first, API keys as fallback |
+| First vertical slice | ✅ | Email trigger → notification + spreadsheet write |
+| Target user | ✅ | Non-technical business users |
+| Branching | ✅ | If/else and parallel from the start |
+| Billing | Deferred | Build product first |
+| Graph storage | ✅ | JSON-only (JSONB column) |
+| Execution storage | ✅ | PostgreSQL only initially |
+| Real-time | ✅ | Polling first, WebSockets later |
+| Package managers | ✅ | npm (frontend), uv (backend) |

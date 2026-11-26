@@ -1,970 +1,540 @@
-# Pivot: First Implementation Plan
+# Pivot: Implementation Plan
 
 ## 1. Purpose
 
-This document defines the first implementation of Pivot: a small, working version that lets a user sign in, visually create and save a workflow, execute it asynchronously, and inspect the result.
+Pivot is a multi-tenant SaaS business automation platform. Organizations sign up, connect their systems (email, databases, APIs, spreadsheets, messaging), and build visual workflows that trigger and act automatically. The target user is non-technical — a business user who can drag, drop, and configure without writing code.
 
-The implementation should be a thin but complete vertical slice through the system. It is not a complete no-code platform, and it should not include the entire integration ecosystem from the beginning.
+The platform is comparable to Zapier, Make, or n8n, but self-branded per tenant, with granular permission tiers so sensitive automations are invisible to unauthorized staff.
 
-The target first milestone is:
+### First milestone target
 
-> A signed-in user can open the workflow editor, add a simple HTTP request workflow, save it, run it, and view its execution status and node output.
+> A signed-in user connects a Gmail account, creates a workflow that triggers when an email with a specific label arrives, and the workflow sends a notification and writes a row to a Google Sheet — all configured through a visual editor with no code.
 
-## 2. Product Priorities
+## 2. Product priorities
 
-The first implementation should prioritize:
+1. **Visual workflow builder** — drag-and-drop, non-technical audience
+2. **Integration ecosystem** — OAuth connectors for major services, API keys as fallback
+3. **Event-driven triggers** — email labels, database changes, webhooks, scheduled polling
+4. **Automated actions** — send email, write to spreadsheet, send notification, call API
+5. **Branching and conditional logic** — if/else paths, parallel branches from day one
+6. **Multi-tenant isolation** — each organization's data, connections, and workflows are fully separated
+7. **Granular permissions** — fixed admin role + custom roles per organization with automation-level visibility
+8. **White-label theming** — dynamic color palettes and branding per tenant
+9. **Operational dashboards** — stats pages for monitoring workflows, executions, and platform health
+10. **Asynchronous execution** — background workers with persistent state
 
-1. **Visual workflow editing**
-2. **Workflow persistence**
-3. **Workflow execution**
-4. **Asynchronous workers**
-5. **Execution monitoring**
-6. **Authentication and permissions**
-7. **REST API integration**
-8. **Easy future extension**
+## 3. Architecture overview
 
-The project should begin with personal use in mind while keeping the following SaaS-compatible concepts in place:
+### 3.1 Deployment model
 
-- User accounts
-- Permissions
-- Workflow ownership
-- Organization or team boundaries
-- Durable execution records
-- Multi-host deployment support
+Multi-tenant SaaS. All tenants share the same infrastructure with row-level data isolation through the workspace/organization model. Each organization gets its own branding, roles, and connected services.
 
-## 3. Initial Assumptions
+### 3.2 Stack
 
-These assumptions are recommendations for the first implementation and can be changed before coding begins.
+| Layer | Technology |
+|---|---|
+| Frontend | Vue 3, TypeScript, Vue Flow (editor), Pinia (state), Vue Router |
+| Backend | Python, FastAPI, SQLModel, Alembic, Pydantic, Celery |
+| Database | PostgreSQL (all durable state) |
+| Broker / Cache | Redis (Celery broker, real-time pub/sub, caching) |
+| Background workers | Celery (workflow execution, polling triggers, scheduled tasks) |
+| OAuth / Secrets | Encrypted credential store in PostgreSQL, OAuth2 flows per provider |
+| Real-time | WebSockets (notification layer, polling REST remains source of truth) |
+| Containerization | Docker Compose (dev), production-ready container images |
 
-### 3.1 Deployment
-
-- Local development will use Docker Compose.
-- The same application structure should remain deployable to a hosted environment.
-- PostgreSQL will store application data.
-- Redis will act as the Celery broker and may later also support caching or real-time features.
-- Celery workers will execute workflows outside the web request.
-
-### 3.2 User Model
-
-- Authentication will exist from the beginning.
-- The initial permission model will distinguish at least:
-  - Owners
-  - Editors
-  - Viewers
-- A simple organization or workspace model will establish ownership boundaries.
-- Personal workspaces should exist first.
-- Team and SaaS features may expand later without redesigning workflow records.
-
-### 3.3 Workflow Scope
-
-The first workflow format will support:
-
-- A manual trigger
-- HTTP request nodes
-- A transform or data node
-- A condition node
-- Linear and branching execution
-- Structured node input and output
-- One JSON workflow definition per saved workflow
-
-The following features are intentionally deferred:
-
-- Sub-workflows
-- Workflow versioning
-- Execution replay
-- Scheduled triggers
-- Webhook triggers
-- Third-party notification integrations
-- Database integrations
-- Sports data integrations
-- Collaborative real-time editing
-- Node marketplace or plugin installation
-
-### 3.4 Recommended Initial Architecture
-
-The recommended monorepo structure is:
+### 3.3 Repository layout
 
 ```text
 Pivot/
-  frontend/
-  backend/
-  docker/
-  docs/
-  .github/workflows/
+  frontend/          # Vue 3 SPA
+  backend/           # FastAPI + Celery
+  docker/            # Dockerfiles
+  docs/              # Architecture, guides
+  .github/workflows/ # CI/CD
   docker-compose.yml
-  README.md
-  IMPLEMENTATION_PLAN.md
 ```
 
-The frontend and backend should be independently runnable, but the repository will provide Docker Compose for the complete local system.
+## 4. Data model
 
-## 4. Core Data Model
+### 4.1 Multi-tenancy and identity
 
-The initial database should represent the following concepts.
+**User** — id, email, password_hash, display_name, is_active, created_at, updated_at
 
-### 4.1 User
+**Workspace** (organization/tenant) — id, name, slug, owner_user_id, theme_config (JSONB), settings (JSONB), created_at, updated_at
 
-Suggested fields:
+**WorkspaceMembership** — workspace_id, user_id, role_id, created_at
 
-- `id`
-- `email`
-- `password_hash` or external identity provider ID
-- `display_name`
-- `is_active`
-- `created_at`
-- `updated_at`
+**Role** — id, workspace_id (nullable — null = system role), name, is_system (bool), permissions (JSONB), created_at, updated_at
 
-### 4.2 Workspace
+System roles (workspace_id=null, is_system=true): `admin` (full access), `member` (default). Workspace custom roles carry a permissions object that grants/denies visibility and actions on automation folders/tags.
 
-Suggested fields:
+### 4.2 Permissions model
 
-- `id`
-- `name`
-- `slug`
-- `owner_user_id`
-- `created_at`
-- `updated_at`
+The permissions JSONB on each role defines:
 
-A workspace prevents user-specific workflows from being directly accessible by unrelated users.
+```json
+{
+  "automations": {
+    "view": ["*"],
+    "edit": ["folder:finance", "tag:hr"],
+    "execute": ["folder:finance"],
+    "manage": false
+  },
+  "connections": { "view": true, "manage": false },
+  "members": { "view": true, "manage": false },
+  "settings": { "view": false, "manage": false },
+  "stats": { "view": true }
+}
+```
 
-### 4.3 Workspace Membership
+The `admin` system role bypasses all checks. Folder and tag-based scoping lets organizations hide sensitive automations (e.g., financial workflows invisible to base employees). Backend enforces all permission checks; frontend uses them only for UI gating.
 
-Suggested fields:
+### 4.3 Connections (integrations)
 
-- `workspace_id`
-- `user_id`
-- `role`
-- `created_at`
+**Connection** — id, workspace_id, provider (e.g. `gmail`, `google_sheets`, `slack`, `postgres`), name, auth_type (`oauth2` | `api_key` | `connection_string`), credentials_encrypted (bytea), scopes, status, connected_by_user_id, created_at, updated_at
 
-Initial roles:
+**ConnectorRegistry** — provider slug, display name, icon, auth_type, oauth config (client_id/secret from env), available scopes, available triggers, available actions
 
-- `owner`
-- `editor`
-- `viewer`
+Credentials are encrypted at rest using a per-workspace key derived from `PIVOT_ENCRYPTION_KEY`. OAuth tokens are auto-refreshed. Connection strings and API keys are stored encrypted, never logged, never returned in API responses.
 
-### 4.4 Workflow
+### 4.4 Workflows
 
-Suggested fields:
+**Workflow** — id, workspace_id, name, description, folder, tags (array), definition (JSONB), is_active, created_by, created_at, updated_at
 
-- `id`
-- `workspace_id`
-- `name`
-- `description`
-- `definition`
-- `is_active`
-- `created_at`
-- `updated_at`
-
-`definition` should contain the visual graph and node configuration as validated JSON.
-
-It should be stored as a JSON document or normalized graph tables depending on the implementation, but JSON should remain the canonical exported/imported format.
-
-### 4.5 Workflow Execution
-
-Suggested fields:
-
-- `id`
-- `workflow_id`
-- `trigger_type`
-- `status`
-- `input`
-- `output`
-- `error`
-- `started_at`
-- `finished_at`
-- `created_by`
-
-Suggested statuses:
-
-- `queued`
-- `running`
-- `succeeded`
-- `failed`
-- `cancelled`
-
-### 4.6 Node Execution
-
-Suggested fields:
-
-- `id`
-- `execution_id`
-- `node_id`
-- `node_type`
-- `status`
-- `input`
-- `output`
-- `error`
-- `started_at`
-- `finished_at`
-
-This table enables node-level monitoring and debugging.
-
-## 5. Workflow Definition Format
-
-The workflow definition should use a simple, versioned JSON schema.
-
-Example structure:
-
+**WorkflowDefinition** (the JSONB):
 ```json
 {
   "schema_version": 1,
   "nodes": [
     {
       "id": "trigger_1",
-      "type": "manual_trigger",
+      "type": "email_trigger",
       "position": { "x": 100, "y": 200 },
-      "config": {}
+      "config": {
+        "connection_id": "uuid",
+        "label_filter": "invoices"
+      }
     },
     {
-      "id": "http_1",
-      "type": "http_request",
-      "position": { "x": 320, "y": 200 },
-      "config": {
-        "method": "GET",
-        "url": "https://example.com/api/status"
-      }
+      "id": "action_1",
+      "type": "send_notification",
+      "position": { "x": 400, "y": 200 },
+      "config": { "channel": "slack", "message": "New invoice received" }
     }
   ],
   "edges": [
-    {
-      "id": "edge_1",
-      "source": "trigger_1",
-      "target": "http_1"
-    }
+    { "id": "e1", "source": "trigger_1", "target": "action_1" }
   ]
 }
 ```
 
-The format must include:
+### 4.5 Executions
 
-- A schema version for future migrations
-- Stable node IDs
-- Node types
-- Node configuration
-- Node positions for the visual editor
-- Directed edges
-- Optional edge conditions
+**WorkflowExecution** — id, workflow_id, trigger_type, trigger_data (JSONB), status, started_at, finished_at, created_by, error
 
-Node configuration and input/output data should be validated with Pydantic models rather than treating arbitrary Python dictionaries as trusted types.
+**NodeExecution** — id, execution_id, node_id, node_type, status, input (JSONB), output (JSONB), error, started_at, finished_at
 
-## 6. Extensible Node System
+Statuses: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
 
-The workflow engine should not contain special hard-coded behavior for each future integration.
+### 4.6 Theming
 
-Instead, it should use a node registry:
-
-```text
-Node registry
-  node type
-  display metadata
-  configuration schema
-  input schema
-  output schema
-  executor
+**Workspace.theme_config** (JSONB):
+```json
+{
+  "primary_color": "#2563EB",
+  "secondary_color": "#7C3AED",
+  "accent_color": "#F59E0B",
+  "logo_url": null,
+  "favicon_url": null,
+  "app_name": "Acme Automations"
+}
 ```
 
-Adding a new node should ideally require:
+Frontend reads theme from workspace settings on login and applies CSS custom properties globally. Every color in the UI derives from the palette — no hardcoded brand colors.
 
-1. A Pydantic configuration model
-2. A Pydantic input/output model
-3. An executor implementation
-4. Registration with the node registry
-5. Frontend node metadata or a shared configuration schema
+### 4.7 Audit log
 
-The first implementation may include only:
+**AuditEntry** — id, workspace_id, user_id, action, resource_type, resource_id, metadata (JSONB), created_at
 
-- `manual_trigger`
-- `http_request`
-- `transform`
-- `condition`
+Tracks connection changes, workflow modifications, permission changes, and execution events for compliance and debugging.
 
-The engine should be designed so that future nodes such as schedule, webhook, database, Discord, email, or sports API nodes can be registered without changing workflow dependency resolution.
+## 5. Connector and node system
 
-## 7. Workflow Engine Behavior
+### 5.1 Connector registry
 
-The engine will receive a validated workflow definition and an execution context.
+Each integration provider is a connector that declares:
+- Provider slug and display metadata
+- Auth configuration (OAuth2 endpoints, scopes, or API key schema)
+- Available triggers (events that start a workflow)
+- Available actions (operations a workflow step can perform)
 
-The initial execution process will:
+### 5.2 Node types
 
-1. Load the workflow and verify workspace access.
-2. Validate the workflow against the schema.
-3. Create a workflow execution record with `queued` status.
-4. Resolve node dependencies from edges.
-5. Detect cycles before execution.
-6. Submit the workflow execution task to Celery.
-7. Mark the execution as `running`.
-8. Determine which nodes are ready.
-9. Execute ready nodes.
-10. Pass each node's output to connected nodes.
-11. Evaluate condition branches.
-12. Continue until no executable nodes remain.
-13. Persist node outputs and status.
-14. Mark the workflow execution as `succeeded` or `failed`.
+**Triggers** (start a workflow):
+- `email_trigger` — email received with label/filter match
+- `webhook_trigger` — incoming HTTP POST to a generated URL
+- `schedule_trigger` — cron expression
+- `database_trigger` — polling for new/changed rows
+- `api_poll_trigger` — periodic check of an API endpoint or website
+- `manual_trigger` — user clicks "Run"
 
-The engine should support:
+**Actions** (perform an operation):
+- `send_email` — send via connected email account
+- `write_spreadsheet` — append/update rows in Google Sheets
+- `send_notification` — Slack, Teams, Discord, or in-app
+- `http_request` — arbitrary HTTP call with response handling
+- `database_query` — read/write to a connected database
+- `transform` — map, filter, format data between steps
+- `delay` — wait a configured duration before continuing
+- `create_record` — write to a connected CRM/database/service
 
+**Logic** (control flow):
+- `condition` — if/else branching based on expressions
+- `switch` — multi-branch routing
+- `loop` — iterate over a list from a previous step
+- `parallel` — fan-out to multiple branches, fan-in on completion
+
+**Utility**:
+- `log` — write to execution log for debugging
+- `set_variable` — store a value for use by later steps
+- `error_handler` — catch and handle failures from upstream nodes
+
+### 5.3 Adding a new node
+
+Each node type provides:
+1. A Pydantic config model (what the user configures)
+2. Pydantic input/output models (data schema)
+3. An executor function
+4. Registry metadata (display name, icon, category, description)
+5. Frontend form schema (auto-generates the config UI)
+
+The engine never contains node-specific logic. Adding a node is registration, not engine modification.
+
+## 6. Integration strategy
+
+### 6.1 OAuth connectors (priority)
+
+For major services, users click "Connect" and authorize through OAuth2:
+- **Google** (Gmail, Sheets, Drive, Calendar)
+- **Slack**
+- **Microsoft** (Outlook, Teams, OneDrive, Excel)
+- **Discord**
+
+OAuth client credentials live in environment variables (`PIVOT_GOOGLE_CLIENT_ID`, etc.), never in the database. Per-user tokens are encrypted in the Connection table.
+
+### 6.2 API key / connection string fallback
+
+For services without OAuth or for custom integrations:
+- API keys (entered by user, stored encrypted)
+- Database connection strings (Postgres, MySQL, MongoDB)
+- Webhook URLs
+
+### 6.3 Website / API monitoring
+
+The `api_poll_trigger` node runs on Celery Beat at a configured interval:
+- Fetches a URL and compares the response to the previous fetch
+- Detects changes (content diff, status code change, specific JSON field change)
+- Fires the workflow when a change is detected
+- SSRF protections apply: block private/loopback/link-local addresses
+
+## 7. Permissions deep dive
+
+### 7.1 System roles
+
+| Role | Scope | Description |
+|---|---|---|
+| `admin` | Bypasses all checks | Full access to everything in the workspace |
+| `member` | Default | Access governed by their custom role assignment |
+
+### 7.2 Custom roles
+
+Each workspace can define custom roles (e.g., "Finance Team", "Marketing", "Support Lead"). Each custom role specifies:
+
+- Which automation **folders** and **tags** are visible
+- Whether the user can view, edit, execute, or manage automations in those scopes
+- Whether the user can view/manage connections, members, or settings
+- Whether the user can view stats/dashboards
+
+### 7.3 Enforcement
+
+- Backend: every API route checks the user's effective permissions before returning data
+- Workflow list endpoints filter results based on folder/tag visibility
+- Connection credentials are never returned to users who lack `connections.manage`
+- Frontend: hides UI elements the user cannot access (cosmetic only — backend is authoritative)
+
+## 8. Theming and white-labeling
+
+The frontend theming system is fully dynamic:
+
+- **CSS custom properties** — all colors, border radii, and spacing derive from workspace theme config
+- **Logo and app name** — displayed in the sidebar and login page, pulled from workspace settings
+- **Favicon** — configurable per workspace
+- **Color palette** — primary, secondary, accent, success, warning, error, plus auto-generated light/dark variants
+- **Dark mode** — supported from the start, theme config defines both light and dark palettes
+- **Settings UI** — workspace admins can change the palette live with a color picker and see a preview
+
+No hardcoded brand colors anywhere in the frontend. Every color reference uses a CSS variable.
+
+## 9. Stats and monitoring dashboards
+
+### 9.1 Workflow stats
+
+- Total workflows (active/inactive)
+- Executions over time (line chart)
+- Success/failure rate (donut chart)
+- Average execution duration
+- Most-triggered workflows
+- Workflows with highest failure rate
+
+### 9.2 Execution stats
+
+- Recent executions table with status, duration, trigger type
+- Execution timeline (Gantt-style per node)
+- Node-level success/failure breakdown
+- Error frequency and categories
+
+### 9.3 Platform stats (admin only)
+
+- Active connections by provider
+- Users and roles
+- Storage and execution usage
+- Audit log viewer
+
+## 10. Security requirements
+
+### 10.1 Authentication
+
+- JWT with short-lived access tokens (30 min) and refresh tokens (7 days)
+- `PIVOT_SECRET_KEY` rejected if default in production
+- Issuer/audience validation on all tokens
+- Malformed token subjects return 401, not 500
+- Password length bounded (8–128 characters, bcrypt safe range)
+- Swagger docs disabled in production (`debug=False`)
+
+### 10.2 Secrets and credentials
+
+- OAuth tokens and API keys encrypted at rest using `PIVOT_ENCRYPTION_KEY`
+- Credentials never logged, never returned in API responses
+- Workflow exports strip connection credentials (export connection_id references, not secrets)
+- Audit log tracks connection creation/modification
+
+### 10.3 Network safety
+
+- HTTP/API poll nodes: validate URLs, block private/loopback/link-local addresses (SSRF)
+- Restrict redirect chains, cap response size, enforce timeouts
+- Database connections: validate connection strings, enforce TLS where available
+- CORS allowlist, rate limiting, input validation
+
+### 10.4 Multi-tenant isolation
+
+- Every database query is scoped to the authenticated user's workspace
+- No cross-workspace data access is possible through the API
+- Background workers validate workspace context before executing
+- Connection credentials are workspace-scoped and encrypted per workspace
+
+## 11. Implementation sequence
+
+### Phase 1: Core platform (Steps 1–6) — DONE through Step 3
+
+Steps 1–3 are complete: repo foundation, database/migrations, auth/workspaces.
+
+#### Step 4: Custom roles and permissions
+
+Extend the existing workspace role system to support custom roles.
+
+Deliverables:
+- Role model with JSONB permissions
+- System roles (admin, member) seeded on workspace creation
+- Custom role CRUD API
+- Permission checking utilities
+- Folder and tag-based automation scoping
+- Migration and tests
+
+#### Step 5: Workflow storage
+
+Add the workflow model and CRUD API.
+
+Deliverables:
+- Workflow Pydantic models (definition schema with schema_version, nodes, edges)
+- SQLModel Workflow table with folder and tags fields
+- CRUD API: list (filtered by permissions), create, read, update, archive, duplicate, import, export
+- Workflow schema validation (reject cycles, validate node types)
+- Permission-aware filtering on list endpoints
+- Migration and tests
+
+#### Step 6: Connection infrastructure
+
+Build the encrypted credential store and connector registry.
+
+Deliverables:
+- Connection model with encrypted credentials column
+- Encryption utilities (PIVOT_ENCRYPTION_KEY)
+- Connector registry (provider definitions)
+- Connection CRUD API (create, list, test, delete — credentials never returned)
+- OAuth2 flow endpoints (authorize URL, callback handler, token refresh)
+- API key and connection string storage
+- Google OAuth connector (Gmail + Sheets — first provider)
+- Migration and tests
+
+### Phase 2: Execution engine (Steps 7–9)
+
+#### Step 7: Node registry and engine
+
+Build the extensible node system and execution engine.
+
+Deliverables:
+- Node registry with config/input/output Pydantic models per node type
+- Node metadata API endpoint (`/api/nodes`)
+- Initial node executors: manual_trigger, email_trigger, http_request, send_email, write_spreadsheet, send_notification, transform, condition
 - Topological dependency resolution
-- Conditional branches
-- Structured data propagation
-- Persistent node execution records
-- Failures and retries
-- Concurrent execution of independent nodes
-
-The first version does not need to support every concurrency optimization, but it should avoid embedding execution state only in memory.
-
-## 8. Retry and Failure Strategy
-
-Each node may define:
-
-- Maximum retry attempts
-- Retry delay
-- Timeout
-- Failure behavior
-
-The initial HTTP node will:
-
-- Enforce a timeout
-- Reject unsupported or unsafe URLs if SSRF controls are added
-- Retry configured transient HTTP status codes
-- Store status, headers, and body in structured output
-- Record failed requests without exposing secrets
-
-Node and workflow failure rules should be explicit:
-
-- `stop`: stop the workflow after failure
-- `continue`: mark the node failed and continue if possible
-- `retry`: retry the node according to node configuration
-
-Secrets in node configuration must not be logged or returned in API responses.
-
-## 9. API Plan
-
-The FastAPI backend exposes routes under `/api` with no version segment. API versioning is handled through git and GitHub releases.
-
-Example route groups:
-
-```text
-/api/auth
-/api/workspaces
-/api/workflows
-/api/executions
-/api/nodes
-/api/users
-```
-
-### 9.1 Authentication
-
-- Register and log in
-- Read the current user
-- Refresh or revoke sessions
-- Logout
-- Enforce workspace membership
-- Enforce permissions per operation
-
-The authentication implementation must decide between:
-
-- Cookie-based sessions
-- JWT access and refresh tokens
-- External identity provider
-
-Recommended for the first implementation: secure cookie-based sessions or short-lived access tokens with refresh tokens, rather than placing credentials directly in Vue state.
-
-### 9.2 Workflow Routes
-
-Minimum operations:
-
-- List workflows
-- Create a workflow
-- Read a workflow
-- Update a workflow
-- Delete or archive a workflow
-- Duplicate a workflow
-- Export a workflow
-- Import a workflow
-
-### 9.3 Execution Routes
-
-Minimum operations:
-
-- Start a workflow execution
-- List workflow executions
-- Read execution details
-- Read node executions
-- Cancel an execution when supported
-- Retry an execution when supported
-
-## 10. Frontend Plan
-
-The Vue 3 application should use TypeScript and Vue Flow.
-
-Suggested structure:
-
-```text
-frontend/src/
-  app/
-  pages/
-  components/
-  features/
-    auth/
-    workspaces/
-    workflows/
-    editor/
-    executions/
-  composables/
-  services/
-  stores/
-  types/
-  styles/
-```
-
-Suggested routes:
-
-- `/login`
-- `/register`
-- `/workspaces`
-- `/workspaces/:workspaceId/workflows`
-- `/workspaces/:workspaceId/workflows/:workflowId/edit`
-- `/workspaces/:workspaceId/workflows/:workflowId/executions`
-- `/executions/:executionId`
-
-## 11. Visual Editor Requirements
-
-The first editor should support:
-
-- A canvas
-- Pan and zoom
-- Add-node panel
-- Dragging nodes
-- Connecting nodes
-- Selecting nodes
-- Deleting nodes
-- Deleting edges
-- Editing node configuration
-- Saving workflow definitions
-- Loading workflow definitions
-- Executing the saved workflow
-- Opening execution status
-
-The UI does not need advanced features in the first milestone, but it should provide:
-
-- Clear unsaved-change state
-- Save feedback
-- Execution feedback
-- Validation errors
-- Node status indicators
-- Loading and empty states
-- Permission-aware controls
-
-## 12. Real-Time Monitoring
-
-The first version may use WebSockets or polling.
-
-Recommended initial approach:
-
-1. Create an execution record immediately.
-2. Queue a Celery task.
-3. Return the execution ID.
-4. Frontend polls execution status until completion.
-5. Add WebSockets later for efficient real-time updates.
-
-Once the architecture is stable, WebSockets can provide:
-
-- Execution status changes
-- Node status changes
-- Worker activity
-- Failure notifications
-
-The REST API should remain the source of truth. WebSockets should be a notification layer, not the primary persistence mechanism.
-
-## 13. Security Requirements
-
-Security should be built into the foundation.
-
-### 13.1 Authorization
-
-- Never rely only on frontend permission checks.
-- Every workflow and execution route must enforce workspace membership.
-- Editors may edit and execute workflows.
-- Viewers may inspect workflows and executions.
-- Only owners or explicitly permitted users may manage memberships.
-
-### 13.2 Secrets
-
-- Secrets must use environment variables or a future secrets provider.
-- Workflow secrets must not appear in workflow export data unless explicitly designed.
-- Logs must redact credentials and authorization headers.
-- Node configuration API responses must exclude secret values where appropriate.
-
-### 13.3 HTTP Integrations
-
-- Validate URLs.
-- Block private, loopback, and link-local addresses unless an explicit safe mode is enabled.
-- Restrict redirect behavior.
-- Define allowed protocols.
-- Set maximum response size.
-- Apply request and execution timeouts.
-
-### 13.4 General API Protection
-
-- CORS allowlist
-- Rate limiting
-- Input validation
-- CSRF protection if cookies are used
-- SQL parameterization through SQLModel (SQLAlchemy core)
-- Audit-sensitive operations
-
-## 14. Testing Plan
-
-Testing is a requirement for the initial implementation, not a later cleanup task.
-
-### 14.1 Backend Tests
-
-Use Pytest for:
-
-- Pydantic workflow schema validation
-- Authentication
-- Permission checks
-- Workflow CRUD
-- Workflow execution creation
-- Dependency resolution
-- Cyclic workflow detection
-- Branch evaluation
-- Node execution
-- HTTP node behavior
-- Retry behavior
-- Database migrations
-
-The HTTP node tests should mock external requests instead of depending on the public internet.
-
-### 14.2 Frontend Tests
-
-Use Vitest for:
-
-- Stores and API state
-- Route guards
-- Node configuration forms
-- Workflow validation
-- Add, move, connect, and delete nodes
-- Save behavior
-- Execution status display
-
-Browser-level tests may be added after the editor stabilizes.
-
-### 14.3 Integration Tests
-
-The first integration test should prove the main vertical slice:
-
-1. Register or log in
-2. Create a workspace
-3. Create a workflow
-4. Add a manual trigger
-5. Add an HTTP request node
-6. Connect the nodes
-7. Save the workflow
-8. Start execution
-9. Observe success or failure
-10. Inspect node input and output
-
-## 15. Local Docker Setup
-
-The initial services should include:
-
-- `frontend`
-- `backend`
-- `postgres`
-- `redis`
-- `celery-worker`
-- `celery-beat` only if scheduling is implemented
-
-The local setup should support:
-
-- One-command startup
-- Hot reload for frontend and backend
-- Persistent PostgreSQL data
-- Environment-based configuration
-- A way to reset development data
-- Worker log visibility
-
-Database migrations will use Alembic.
-
-## 16. CI/CD Foundation
-
-The initial CI pipeline should run:
-
-1. Backend formatting and lint checks
-2. Backend tests
-3. Frontend type checking
-4. Frontend lint checks
-5. Frontend tests
-6. Docker build validation
-
-A later CD pipeline may:
-
-- Build versioned images
-- Publish images to a registry
-- Run migrations
-- Deploy frontend and backend services
-- Run database backup and rollback procedures
-
-## 17. Implementation Sequence
-
-### Step 1: Repository Foundation
-
-Create the monorepo directories and baseline configuration.
-
-Deliverables:
-
-- Frontend package with Vue 3 and TypeScript
-- FastAPI application package
-- Docker Compose configuration
-- Environment template
-- PostgreSQL and Redis services
-- Shared formatting and lint configuration
-- README setup instructions
-
-Acceptance criteria:
-
-- PostgreSQL starts successfully
-- Redis starts successfully
-- Backend health endpoint returns success
-- Frontend loads in a browser
-- Both services run locally in Docker
-
-### Step 2: Database and Migrations
-
-Add SQLModel and Alembic. Use SQLModel `table=True` models for tables, and drop to SQLAlchemy core only where SQLModel has no equivalent (e.g. JSONB columns, indexes). Alembic autogenerates from `SQLModel.metadata`.
-
-Deliverables:
-
-- Database session setup
-- Base models
-- Initial migration
-- Development seed mechanism
-- Migration commands
-
-Acceptance criteria:
-
-- A clean database migrates successfully
-- Re-running migrations is safe
-- Database connection errors are clear
-
-### Step 3: Authentication and Workspaces
-
-Implement login and workspace boundaries.
-
-Deliverables:
-
-- User registration or initial setup
-- Login and logout
-- Current-user endpoint
-- Workspace creation
-- Workspace membership
-- Role enforcement
-
-Acceptance criteria:
-
-- A user cannot access another workspace
-- Viewer permissions are enforced
-- Editor permissions are enforced
-- Owner permissions are enforced
-
-This step establishes the SaaS-ready ownership model before workflows are added.
-
-### Step 4: Workflow Storage
-
-Add the workflow JSON model and CRUD API.
-
-Deliverables:
-
-- Workflow Pydantic models
-- SQLModel workflow model
-- List, create, read, update, archive, duplicate, import, and export endpoints
-- Workflow schema validation
-- Frontend workflow service
-
-Acceptance criteria:
-
-- A workflow can be created and persisted
-- Invalid workflow definitions are rejected
-- Duplicate and archived workflows behave predictably
-- Unauthorized users cannot access workflows
-
-### Step 5: Node Registry and Workflow Schema
-
-Create the extensible node system.
-
-Deliverables:
-
-- Node registry
-- Node metadata endpoint
-- Manual trigger executor
-- HTTP request executor
-- Transform executor
-- Condition executor
 - Cycle detection
-- Dependency resolution
+- Branching execution (if/else, parallel)
+- Structured data propagation between nodes
+- Tests for each node executor (mocked external calls)
 
-Acceptance criteria:
+#### Step 8: Execution persistence
 
-- Nodes register without modifying core orchestration logic
-- Invalid graphs are rejected
-- Cyclic graphs are rejected
-- The HTTP executor can make a controlled request
-- A condition can select an output branch
-
-### Step 6: Execution Persistence
-
-Create workflow and node execution records.
+Create execution and node execution records.
 
 Deliverables:
-
-- Execution database models
+- WorkflowExecution and NodeExecution models
 - Execution creation API
-- Node execution creation API
-- Execution status updates
-- Execution detail endpoints
-- Retry and cancellation records
+- Execution detail and list endpoints (permission-filtered)
+- Node execution records with input/output/error
+- Status management (queued → running → succeeded/failed)
+- Retry and cancellation support
+- Migration and tests
 
-Acceptance criteria:
+#### Step 9: Celery workers and triggers
 
-- An execution record exists before processing
-- Every node execution has a status
-- Final execution status reflects node outcomes
-- Input, output, and errors can be retrieved safely
-
-### Step 7: Celery Workers
-
-Move workflow execution off the API process.
+Move execution off the API process and implement trigger polling.
 
 Deliverables:
-
-- Celery application setup
-- Redis broker configuration
+- Celery app configuration with Redis broker
 - Workflow execution task
-- Worker service
-- Task serialization safeguards
-- Task retry configuration
+- celery-worker Docker service
+- celery-beat for scheduled and polling triggers
+- Email trigger implementation (poll Gmail for labeled messages)
+- Schedule trigger (cron expressions)
+- API poll trigger (website/endpoint monitoring)
+- Task retry and failure handling
+- Tests
 
-Acceptance criteria:
+### Phase 3: Frontend (Steps 10–13)
 
-- Starting a workflow returns quickly
-- Celery executes the workflow asynchronously
-- Worker failures do not corrupt execution state
-- Concurrent executions do not overwrite each other
+#### Step 10: Theming infrastructure
 
-### Step 8: Visual Workflow Editor
+Build the dynamic theming system before any UI pages.
+
+Deliverables:
+- CSS custom property system (all colors from variables)
+- Theme provider composable that reads workspace theme_config
+- Light and dark mode support
+- Theme settings API (admin-only update)
+- Color picker in workspace settings
+- Logo and app name from workspace config
+
+#### Step 11: Auth and workspace UI
+
+Deliverables:
+- Login and registration pages
+- Workspace selector (users may belong to multiple)
+- Workspace settings page (name, theme, roles)
+- Member management page (invite, assign roles)
+- Custom role editor
+- Vue Router with auth guards
+- Pinia stores for auth and workspace state
+
+#### Step 12: Visual workflow editor
 
 Build the Vue Flow editor.
 
 Deliverables:
-
-- Workflow list page
-- Editor canvas
-- Add-node panel
-- Node configuration forms
+- Workflow list page (filtered by folder/tag permissions)
+- Editor canvas with pan/zoom
+- Node palette sidebar (from backend registry)
+- Drag-and-drop node placement
 - Edge creation and deletion
-- Save and load behavior
-- Unsaved-change indicator
-- Node palette metadata from backend
+- Node configuration forms (auto-generated from node schema)
+- Connection selector in node config (pick from workspace connections)
+- Branching visualization (if/else paths, parallel branches)
+- Save, load, unsaved-change indicator
+- Permission-aware controls (view-only for viewers)
 
-Acceptance criteria:
-
-- A user can add and configure nodes
-- A user can connect nodes
-- Invalid graphs show useful validation feedback
-- A workflow reload reproduces the saved canvas
-- Permission restrictions disable unauthorized actions
-
-### Step 9: Execution and Monitoring UI
-
-Add execution management and observation.
+#### Step 13: Execution monitoring UI
 
 Deliverables:
-
-- Run workflow action
-- Execution list
-- Execution detail page
-- Node status display
+- Run workflow action from editor
+- Execution list page with status, duration, trigger info
+- Execution detail page with node-by-node status
 - Node input/output inspector
-- Error display
-- Refresh or polling behavior
+- Error display with actionable messages
+- Polling for status updates (WebSocket notification layer later)
+- Execution timeline visualization
 
-Acceptance criteria:
+### Phase 4: Dashboards and polish (Steps 14–16)
 
-- The user can run a saved workflow
-- The UI updates until the execution completes
-- Users can identify which node failed
-- Inputs and outputs are readable
-- Failed executions show actionable errors
-
-### Step 10: First Complete Vertical-Slice Test
-
-Test and demonstrate the complete first milestone.
-
-The demo workflow should:
-
-1. Start with a manual trigger
-2. Make an HTTP GET or POST request
-3. Transform or inspect the response
-4. Apply a condition
-5. Save and execute successfully
-
-Acceptance criteria:
-
-- A signed-in user can complete the workflow without using the API directly
-- The workflow remains persisted after reload
-- Execution history remains available
-- Node output is visible
-- The workflow can fail and recover without corrupting state
-
-### Step 11: Documentation and Developer Experience
-
-After the vertical slice works, document how to extend it.
+#### Step 14: Stats dashboards
 
 Deliverables:
+- Workflow stats page (execution counts, success rates, durations)
+- Execution analytics (trends over time, failure categories)
+- Admin platform stats (connections, users, storage)
+- Audit log viewer (admin only)
+- Charts using a lightweight library (Chart.js or similar)
 
+#### Step 15: Connections UI
+
+Deliverables:
+- Connections page (list connected services, status indicators)
+- "Connect" flow for OAuth providers (Google, Slack, Microsoft)
+- API key and connection string input forms
+- Connection test button
+- Connection usage display (which workflows use this connection)
+
+#### Step 16: Documentation and CI/CD
+
+Deliverables:
 - Local setup guide
-- Environment variable guide
-- Workflow format documentation
-- Node implementation guide
+- Environment variable reference
+- Connector development guide (how to add a new provider)
+- Node development guide (how to add a new node type)
 - API documentation
-- Database migration guide
-- Deployment guide
-- Troubleshooting guide
+- GitHub Actions CI (lint, test, typecheck, Docker build)
+- Production deployment guide
 
-### Step 12: CI and Release Hardening
+## 12. Decisions
 
-Once the core is stable:
+| Decision | Status | Choice |
+|---|---|---|
+| Authentication strategy | Decided | JWT (access + refresh tokens) |
+| Permission model | Decided | System roles (admin/member) + custom roles with JSONB permissions, folder/tag scoping |
+| Deployment model | Decided | Multi-tenant SaaS |
+| Integration auth | Decided | OAuth first for major providers, API keys as fallback |
+| First vertical slice | Decided | Email trigger → notification + spreadsheet write |
+| Target user | Decided | Non-technical business users |
+| Workflow branching | Decided | If/else and parallel branches from the start |
+| Billing | Deferred | Build product first, add subscription tiers later |
+| Workflow graph storage | Decided | JSON-only (JSONB column) |
+| Execution data storage | Decided | PostgreSQL only (add Redis cache later if needed) |
+| Real-time monitoring | Decided | Polling first, WebSockets as notification layer later |
+| Frontend package manager | Decided | npm |
+| Backend package manager | Decided | uv (pyproject.toml + uv.lock) |
 
-- Enable CI checks
-- Containerize all services
-- Add automated migrations
-- Add backup documentation
-- Add release versioning
-- Add a smoke test that starts the full system
+## 13. Suggested additional automations
 
-This is the boundary for the initial implementation milestone.
+Common business automation actions to include in the node library beyond the basics:
 
-## 18. Suggested First Demo Workflow
+**Communication**: send SMS (Twilio), post to Teams/Discord channel, create a support ticket, send a push notification
 
-A practical first demo is a "service monitor":
+**Data**: generate PDF report, merge/split spreadsheet data, format and validate data, deduplicate records
 
-```text
-Manual Trigger
-  -> HTTP Request
-  -> Transform Response
-  -> Condition
-      -> Success branch
-      -> Failure branch
-```
+**CRM and sales**: create/update CRM contact, log activity, send follow-up email sequence, assign lead
 
-The HTTP node should check an API endpoint and return status information. The transform node should extract fields such as status code or availability. The condition node should branch based on whether the response is successful.
+**IT and DevOps**: create Jira/Linear ticket, trigger CI/CD pipeline, restart a service, check SSL certificate expiry
 
-This proves:
+**Finance**: generate invoice, reconcile records, flag transactions over threshold, send payment reminder
 
-- Manual triggering
-- External API communication
-- Data propagation
-- Conditional branching
-- Execution persistence
-- Node-level monitoring
+**HR**: send onboarding checklist, schedule review reminder, update directory entry
 
-## 19. Proposed Milestones
-
-### Milestone A: Foundation
-
-- Monorepo
-- Docker Compose
-- PostgreSQL
-- Redis
-- FastAPI
-- Vue
-- Health checks
-- CI baseline
-
-### Milestone B: Auth and Storage
-
-- Authentication
-- Workspaces
-- Permissions
-- Workflow CRUD
-- Database migrations
-
-### Milestone C: Engine
-
-- Workflow schema
-- Node registry
-- Dependency resolution
-- Branching
-- Execution persistence
-- Celery workers
-
-### Milestone D: Editor
-
-- Workflow canvas
-- Nodes and edges
-- Configuration forms
-- Save and load
-- Permission-aware UI
-
-### Milestone E: Monitoring
-
-- Execution list
-- Execution detail
-- Node status
-- Input/output inspection
-- Polling
-
-### Milestone F: Release Candidate
-
-- End-to-end test
-- Documentation
-- Docker deployment
-- CI/CD
-- Security hardening
-
-## 20. Decisions to Confirm Before Coding
-
-The following choices may affect implementation:
-
-1. **Authentication strategy**
-   - Secure cookie sessions
-   - JWT
-   - External identity provider
-
-2. **Monorepo package management**
-   - npm and Python dependency files
-   - pnpm or npm
-   - Poetry or plain requirements files
-   - **Decided (backend):** uv with `pyproject.toml` + `uv.lock`
-
-3. **Workflow graph storage**
-   - JSON-only workflow definition
-   - Normalized database nodes and edges
-   - Hybrid approach
-
-4. **Execution data storage**
-   - PostgreSQL only
-   - PostgreSQL with Redis status/cache
-   - PostgreSQL plus object storage for large outputs
-
-5. **First HTTP node behavior**
-   - Basic request/response
-   - Headers and authentication
-   - Credentials and secret references
-
-6. **Permission model**
-   - Workspace role only
-   - Per-workflow permissions
-   - Both role-based and resource-based permissions
-
-7. **Frontend editor scope**
-   - Full node palette
-   - Small first node palette
-   - Schema-generated configuration forms
-
-8. **Real-time monitoring**
-   - Polling first
-   - WebSockets from the beginning
-
-These decisions do not require final answers before repository scaffolding begins, but they should be made explicitly before the related implementation step starts.
+These are future node types that follow the same registration pattern — no engine changes required.
