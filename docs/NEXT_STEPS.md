@@ -2,41 +2,59 @@
 
 A checklist of the things you need to do yourself. The build order follows `IMPLEMENTATION_PLAN.md` §17. Tick items off as they're done.
 
-_Last updated: 2026-11-25_
+_Last updated: 2026-11-25 (Steps 1–2 complete)_
 
 ## 1. Housekeeping (now)
 
-- [ ] **Link the package-bundled agent skills.** The automated run was blocked by permissions, so run this yourself from `backend/`:
-      `uvx library-skills` (add `--claude` to also manage `.claude/skills`). It should find the `fastapi` and `typer` skills.
-- [ ] **Make the first commit.** Everything (`backend/`, `frontend/`, `docs/`, `.agents/`, `CLAUDE.md`, `IMPLEMENTATION_PLAN.md`) is still untracked on `main`.
-      Commit `backend/uv.lock`. Never commit `.venv/` or `.env`, which `.gitignore` already excludes.
-- [ ] **Delete the stray root `package-lock.json`.** It's empty because there's no root `package.json`. Keep it only if you plan npm workspaces.
-- [ ] **Optional: pin the Python version.** uv built the venv on Python 3.15.2, but `pyproject.toml` only requires `>=3.12`.
-      Run `uv python pin 3.12` (or 3.13) in `backend/` if you want the version to match the planned Docker image.
-- [ ] **Optional: unblock `pytest.exe`.** Windows Application Control blocks it. Allow it, or keep using `uv run python -m pytest`.
+- [ ] **Link the package-bundled agent skills.** Run this yourself from `backend/`: `uvx library-skills` (add `--claude` to also manage `.claude/skills`). It should find the `fastapi` and `typer` skills.
+- [x] First commit made (`docker added`). `backend/uv.lock` is tracked; `.venv/` and `.env` are ignored.
+- [x] Stray root `package-lock.json` is gone. The root `package.json` now only holds the Docker convenience scripts (no dependencies, no workspaces).
+- [ ] **Optional: pin the Python version.** `pyproject.toml` requires `>=3.12` and the Docker image uses 3.12. Run `uv python pin 3.12` in `backend/` so native runs match.
+- [ ] **Optional: unblock `pytest.exe`.** Windows Application Control blocks it on this machine. Use `python -m pytest` natively, or `npm test` (runs in Docker, unaffected).
 
-## 2. Finish Step 1: Repository Foundation
+## 2. Step 1: Repository Foundation (done)
 
-These deliverables are still missing:
+- [x] Docker Desktop installed.
+- [x] `docker-compose.yml` with `postgres`, `redis`, `backend`, `frontend` and a one-shot `migrate` (profile `db`, auto-enabled once `backend/alembic.ini` exists). `celery-worker` is added in the Celery step; `celery-beat` only once scheduling exists.
+- [x] `docker/backend.Dockerfile` and `docker/frontend.Dockerfile`.
+- [x] `.env.example`; `npm run up` creates `.env` automatically.
+- [x] README quickstart (`npm run up` / `npm run down`); full command list in `CLAUDE.md`.
+- [x] Verified: `npm run up:d` healthy, `/api/health` ok directly and through the Vite proxy, `npm test`, `npm run lint`, `npm run typecheck` pass in containers.
 
-- [x] Install **Docker Desktop**, which Docker Compose needs.
-- [x] Write `docker-compose.yml` with services `frontend`, `backend`, `postgres`, `redis` and `celery-worker`. Add `celery-beat` later.
-- [x] Add a `backend/Dockerfile` (uv-based) and a `frontend/Dockerfile`. _Done as `docker/backend.Dockerfile` and `docker/frontend.Dockerfile`; `celery-worker` is added in the Celery step._
-- [x] Add a `.env.example` listing every `PIVOT_*` variable, including the future `PIVOT_DATABASE_URL` and `PIVOT_REDIS_URL`.
-- [ ] Add README setup instructions: `uv sync`, `npm install`, `docker compose up`.
+**Daily use:** `npm run up` starts everything; `npm run infra` starts only Postgres and Redis for native runs. If a local Postgres uses port 5432, set `POSTGRES_PORT` in `.env`.
 
-Acceptance: Postgres and Redis start, `GET /api/health` returns ok, the frontend loads, and everything runs in Docker.
+## 3. Step 2: Database and Migrations (done)
 
-## 3. Step 2: Database and Migrations (SQLModel + Alembic)
+- [x] `uv add alembic "psycopg[binary]"`.
+- [x] `app/core/db.py` with lazy engine, `get_session` dependency, and `SessionDep` alias.
+- [x] `app/core/config.py` now has `database_url` (PostgresDsn), `redis_url`, and `debug` settings.
+- [x] `alembic init` done; `alembic/env.py` reads `PIVOT_DATABASE_URL` and uses `SQLModel.metadata`.
+- [x] Initial empty baseline migration generated and applied.
+- [x] `npm run up` auto-runs `alembic upgrade head` via the `migrate` service (activates when `alembic.ini` exists).
+- [x] `/api/health` now returns `{"status":"ok","database":"ok"}` with a live DB check.
+- [x] `app/models/` package created with `base.py` (shared field factories). Import new model files in `__init__.py`.
+- [x] Tests use mock sessions natively; real Postgres runs in Docker via `npm run test:backend`.
+- [x] Ruff per-file ignores for Alembic env/migration files; ruff post-write hook formats generated migrations.
+- [ ] Dev seed mechanism (deferred to Step 3 when User/Workspace models exist).
 
-`sqlmodel` is already a backend dependency.
+**Note:** Windows Application Control blocks `alembic.exe` and `pytest.exe`. Use `uv run python -m pytest` natively, or `npm run test:backend` in Docker. Alembic commands are wrapped by `npm run db:*` scripts which run in Docker.
 
-- [ ] `uv add alembic "psycopg[binary]"` (the Postgres driver).
-- [ ] Add `app/core/db.py` with the engine, a `get_session` dependency and a `SessionDep = Annotated[Session, Depends(get_session)]` alias (FastAPI-skill style).
-- [ ] Run `alembic init`, point `target_metadata` at `SQLModel.metadata`, and generate the initial migration.
-- [ ] Add a dev seed mechanism and the migration commands to `CLAUDE.md`.
+## 4. Step 3: Authentication and Workspaces (next)
 
-## 4. Decisions you need to make (plan §20)
+Requires settling two decisions from §20 first:
+- **Authentication strategy:** Secure cookie sessions (needs CSRF) / JWT / external identity provider
+- **Permission model:** Workspace role only / per-workflow / both
+
+Deliverables:
+- [ ] User model and registration
+- [ ] Login/logout endpoints
+- [ ] Current-user endpoint
+- [ ] Workspace creation and membership models
+- [ ] Role enforcement (owner / editor / viewer)
+- [ ] Migration for all new tables
+- [ ] Tests for auth and permission boundaries
+
+## 5. Decisions you need to make (plan §20)
 
 Settle each one before its step starts:
 
@@ -51,6 +69,6 @@ Settle each one before its step starts:
 | Real-time monitoring | Step 9 (monitoring UI) | Polling first (the plan's default) / WebSockets from the start |
 | Frontend package manager | Any time | npm (current) / pnpm |
 
-## 5. Later steps (for reference)
+## 6. Later steps (for reference)
 
 Step 3 auth and workspaces, then Step 4 workflow storage, Step 5 node registry, Step 6 execution persistence, Step 7 Celery workers, Step 8 Vue Flow editor, Step 9 monitoring UI and Step 10 the vertical-slice test. Docs and CI hardening follow.

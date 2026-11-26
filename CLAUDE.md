@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. Docker Compose runs the dev stack (Postgres, Redis, backend, frontend). There is no database schema, Celery, or auth yet. Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
+Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. Docker Compose runs the dev stack (Postgres, Redis, backend, frontend). SQLModel + Alembic are set up with auto-migrations. There are no application models, Celery, or auth yet (next: Step 3, auth + workspaces; see `docs/NEXT_STEPS.md`). Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
 
 ## Commands
 
@@ -51,6 +51,8 @@ npm run build
 ## Backend structure
 
 `app/main.py` builds the app with `create_app()`. Each resource gets one module in `app/api/` (e.g. `app/api/health.py`) that declares its own `APIRouter(prefix="/<resource>", tags=[...])`. `app/api/__init__.py` mounts them all under `/api`. Register a new module there. The URL has no version segment, because API versioning is handled through git and GitHub releases, not URL paths or folders. Settings live in `app/core/config.py` (pydantic-settings). Env vars use the `PIVOT_` prefix and can also come from `backend/.env`, e.g. `PIVOT_CORS_ORIGINS='["http://localhost:5173"]'`.
+
+Database: `app/core/db.py` provides a lazy engine (created on first use, not at import time), a `get_session` dependency, and a `SessionDep` type alias. Table models go in `app/models/` as SQLModel `table=True` classes; each new model file must be imported in `app/models/__init__.py` so Alembic sees it. Shared field factories (`id_field`, `created_at_field`, `updated_at_field`) live in `app/models/base.py`. Alembic config is in `backend/alembic.ini`; `alembic/env.py` reads `PIVOT_DATABASE_URL` from settings. Migrations in `alembic/versions/` are auto-generated and auto-applied by `npm run up`.
 
 The frontend calls the backend only through relative `/api/...` URLs in `src/services/`. API functions take an injectable `fetchFn` so they can be unit-tested without a server.
 
