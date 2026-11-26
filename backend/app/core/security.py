@@ -1,0 +1,44 @@
+"""Password hashing and JWT token operations."""
+
+from datetime import UTC, datetime, timedelta
+
+import jwt
+from passlib.context import CryptContext
+
+from app.core.config import settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(plain_password: str) -> str:
+    return pwd_context.hash(plain_password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def create_access_token(user_id: str) -> str:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+        "type": "access",
+        "iat": now,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(user_id: str) -> str:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "exp": now + timedelta(days=settings.refresh_token_expire_days),
+        "type": "refresh",
+        "iat": now,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_token(token: str) -> dict:
+    return jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])

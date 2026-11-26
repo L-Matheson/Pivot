@@ -1,20 +1,14 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.core.db import SessionDep
+from app.schemas.health import HealthResponse
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-class HealthResponse(BaseModel):
-    status: str
-    database: str
-
-
 @router.get("")
 def health(session: SessionDep) -> HealthResponse:
-    """Return service health including a database connectivity check."""
     try:
         session.exec(text("SELECT 1"))
         db_status = "ok"

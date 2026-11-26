@@ -1,9 +1,10 @@
 export interface HealthResponse {
   status: string
+  database: string
 }
 
-export async function getHealth(fetchFn: typeof fetch = fetch): Promise<HealthResponse> {
-  const response = await fetchFn('/api/health')
+export async function getHealth(): Promise<HealthResponse> {
+  const response = await fetch('/api/health')
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.status}`)
   }

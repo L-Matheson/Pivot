@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "fastapi-jwt-auth",
+  "owner": "mumerrazzaq",
+  "repo": "fast-next-todo",
+  "path": ".claude/skills/fastapi-jwt-auth",
+  "branch": "master",
+  "sha": "c61f2b46fd8272c1311b14668d72530d127bf099",
+  "source": "manual"
+}

@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed } from 'vue'
 import { getHealth } from './services/api'
 
-const status = ref<'loading' | 'ok' | 'error'>('loading')
-const error = ref('')
+const { data, error, isPending } = useQuery({
+  queryKey: ['health'],
+  queryFn: getHealth,
+  retry: false,
+})
 
-onMounted(async () => {
-  try {
-    const health = await getHealth()
-    status.value = health.status === 'ok' ? 'ok' : 'error'
-  } catch (e) {
-    status.value = 'error'
-    error.value = e instanceof Error ? e.message : String(e)
-  }
+const status = computed(() => {
+  if (isPending.value) return 'loading' as const
+  if (error.value || data.value?.status !== 'ok') return 'error' as const
+  return 'ok' as const
 })
 </script>
 
@@ -25,7 +25,7 @@ onMounted(async () => {
       <strong v-else-if="status === 'ok'" class="ok">online</strong>
       <strong v-else class="error">unreachable</strong>
     </p>
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="error">{{ error.message }}</p>
   </main>
 </template>
 

@@ -2,7 +2,7 @@
 
 A checklist of the things you need to do yourself. The build order follows `IMPLEMENTATION_PLAN.md` §17. Tick items off as they're done.
 
-_Last updated: 2026-11-25 (Steps 1–2 complete)_
+_Last updated: 2026-11-25 (Steps 1–3 complete)_
 
 ## 1. Housekeeping (now)
 
@@ -39,36 +39,50 @@ _Last updated: 2026-11-25 (Steps 1–2 complete)_
 
 **Note:** Windows Application Control blocks `alembic.exe` and `pytest.exe`. Use `uv run python -m pytest` natively, or `npm run test:backend` in Docker. Alembic commands are wrapped by `npm run db:*` scripts which run in Docker.
 
-## 4. Step 3: Authentication and Workspaces (next)
+## 4. Step 3: Authentication and Workspaces (done)
 
-Requires settling two decisions from §20 first:
-- **Authentication strategy:** Secure cookie sessions (needs CSRF) / JWT / external identity provider
-- **Permission model:** Workspace role only / per-workflow / both
+Decisions settled: **JWT** auth, **workspace-role-only** permissions (owner/editor/viewer).
+
+- [x] User model (`app/models/user.py`) with bcrypt password hashing.
+- [x] Workspace and WorkspaceMembership models (`app/models/workspace.py`) with `WorkspaceRole` enum.
+- [x] Auth utilities: `app/core/security.py` (password hashing, JWT creation/verification), `app/core/auth.py` (FastAPI dependencies: `CurrentUserDep`, `require_workspace_role`).
+- [x] Auth API (`app/api/auth.py`): register, login, refresh, /me.
+- [x] Workspace API (`app/api/workspaces.py`): CRUD + membership management (add/update/remove members).
+- [x] Alembic migration for `user`, `workspace`, `workspacemembership` tables.
+- [x] Auth settings in config: `PIVOT_SECRET_KEY`, `PIVOT_JWT_ALGORITHM`, `PIVOT_ACCESS_TOKEN_EXPIRE_MINUTES`, `PIVOT_REFRESH_TOKEN_EXPIRE_DAYS`.
+- [x] 21 tests (11 auth, 2 health, 8 workspace/permissions). All pass natively and in Docker.
+- [x] End-to-end verified: register → login → /me → create workspace → list workspaces → 401 on no-token.
+- [ ] Dev seed script (create a default user + workspace for local dev).
+- [ ] `PIVOT_SECRET_KEY` must be changed in production (default is a placeholder).
+
+## 5. Step 4: Workflow Storage (next)
+
+Requires settling one decision from §20 first:
+- **Workflow graph storage:** JSON-only / normalized tables / hybrid
 
 Deliverables:
-- [ ] User model and registration
-- [ ] Login/logout endpoints
-- [ ] Current-user endpoint
-- [ ] Workspace creation and membership models
-- [ ] Role enforcement (owner / editor / viewer)
-- [ ] Migration for all new tables
-- [ ] Tests for auth and permission boundaries
+- [ ] Workflow Pydantic models (definition schema with `schema_version`, `nodes[]`, `edges[]`)
+- [ ] SQLModel Workflow table
+- [ ] CRUD API: list, create, read, update, archive, duplicate, import, export
+- [ ] Workflow schema validation (reject cycles, validate node types)
+- [ ] Frontend workflow service (`src/services/`)
+- [ ] Migration and tests
 
-## 5. Decisions you need to make (plan §20)
+## 6. Decisions you need to make (plan §20)
 
 Settle each one before its step starts:
 
-| Decision | Needed before | Options |
-|---|---|---|
-| Authentication strategy | Step 3 (auth/workspaces) | Secure cookie sessions (needs CSRF) / JWT / external identity provider |
-| Permission model | Step 3 | Workspace role only / per-workflow / both |
-| Workflow graph storage | Step 4 (workflow storage) | JSON-only / normalized nodes and edges tables / hybrid |
-| Execution data storage | Step 6 (execution persistence) | Postgres only / plus Redis cache / plus object storage for large outputs |
-| First HTTP node behavior | Step 5 (node registry) | Basic request/response / headers and auth / credentials and secret references |
-| Frontend editor scope | Step 8 (editor) | Full palette / small first palette / schema-generated forms |
-| Real-time monitoring | Step 9 (monitoring UI) | Polling first (the plan's default) / WebSockets from the start |
-| Frontend package manager | Any time | npm (current) / pnpm |
+| Decision | Needed before | Options | Status |
+|---|---|---|---|
+| Authentication strategy | Step 3 | JWT / cookie sessions / external IdP | ✅ JWT |
+| Permission model | Step 3 | Workspace role only / per-workflow / both | ✅ Workspace role only |
+| Workflow graph storage | Step 4 (workflow storage) | JSON-only / normalized nodes and edges tables / hybrid | **decide next** |
+| Execution data storage | Step 6 (execution persistence) | Postgres only / plus Redis cache / plus object storage for large outputs | |
+| First HTTP node behavior | Step 5 (node registry) | Basic request/response / headers and auth / credentials and secret references | |
+| Frontend editor scope | Step 8 (editor) | Full palette / small first palette / schema-generated forms | |
+| Real-time monitoring | Step 9 (monitoring UI) | Polling first (the plan's default) / WebSockets from the start | |
+| Frontend package manager | Any time | npm (current) / pnpm | |
 
-## 6. Later steps (for reference)
+## 7. Later steps (for reference)
 
-Step 3 auth and workspaces, then Step 4 workflow storage, Step 5 node registry, Step 6 execution persistence, Step 7 Celery workers, Step 8 Vue Flow editor, Step 9 monitoring UI and Step 10 the vertical-slice test. Docs and CI hardening follow.
+Step 4 workflow storage, Step 5 node registry, Step 6 execution persistence, Step 7 Celery workers, Step 8 Vue Flow editor, Step 9 monitoring UI and Step 10 the vertical-slice test. Docs and CI hardening follow.

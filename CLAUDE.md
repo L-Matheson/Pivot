@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. Docker Compose runs the dev stack (Postgres, Redis, backend, frontend). SQLModel + Alembic are set up with auto-migrations. There are no application models, Celery, or auth yet (next: Step 3, auth + workspaces; see `docs/NEXT_STEPS.md`). Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
+Pivot is a visual, node-based workflow automation platform (Vue 3 + FastAPI + Celery). `IMPLEMENTATION_PLAN.md` is the authoritative spec for the first milestone. Currently only a minimal skeleton exists: a FastAPI app exposing `GET /api/health`, and a Vue 3 + TS (Vite) app that calls it. Docker Compose runs the dev stack (Postgres, Redis, backend, frontend). SQLModel + Alembic are set up with auto-migrations. JWT authentication, User, Workspace, and WorkspaceMembership models are in place with role-based access control (owner/editor/viewer). There is no Celery or workflow storage yet (next: Step 4, workflow storage; see `docs/NEXT_STEPS.md`). Package management is npm (frontend) and uv (backend, `pyproject.toml` + `uv.lock`).
 
 ## Commands
 
@@ -54,6 +54,8 @@ npm run build
 
 Database: `app/core/db.py` provides a lazy engine (created on first use, not at import time), a `get_session` dependency, and a `SessionDep` type alias. Table models go in `app/models/` as SQLModel `table=True` classes; each new model file must be imported in `app/models/__init__.py` so Alembic sees it. Shared field factories (`id_field`, `created_at_field`, `updated_at_field`) live in `app/models/base.py`. Alembic config is in `backend/alembic.ini`; `alembic/env.py` reads `PIVOT_DATABASE_URL` from settings. Migrations in `alembic/versions/` are auto-generated and auto-applied by `npm run up`.
 
+Authentication: JWT-based (`app/core/security.py` for token creation/verification and password hashing, `app/core/auth.py` for FastAPI dependencies). Protected routes use `CurrentUserDep` (extracts user from Bearer token). Workspace-scoped routes call `require_workspace_role(session, workspace_id, user, minimum_role)` to enforce RBAC. Auth routes are at `/api/auth/` (register, login, refresh, me); workspace routes at `/api/workspaces/`. Settings: `PIVOT_SECRET_KEY`, `PIVOT_JWT_ALGORITHM`, `PIVOT_ACCESS_TOKEN_EXPIRE_MINUTES`, `PIVOT_REFRESH_TOKEN_EXPIRE_DAYS`.
+
 The frontend calls the backend only through relative `/api/...` URLs in `src/services/`. API functions take an injectable `fetchFn` so they can be unit-tested without a server.
 
 Before implementing anything, read the relevant section of `IMPLEMENTATION_PLAN.md` and check `docs/NEXT_STEPS.md`, the user-facing checklist. Update it when a step or decision is completed. Work proceeds in the order given in its §17 "Implementation Sequence" (repo foundation → DB/migrations → auth/workspaces → workflow storage → node registry → execution persistence → Celery → editor → monitoring UI → vertical-slice test). Section §20 lists open decisions (auth strategy, package managers, graph storage, permission granularity, polling vs. WebSockets). Ask the user to settle the relevant one before starting the step it affects; don't pick silently.
@@ -82,7 +84,7 @@ These come from the plan and span multiple components. Preserve them:
 
 - Never log secrets or return them in API responses or workflow exports. Redact auth headers in logs.
 - HTTP node: validate URLs and allowed protocols, block private, loopback, and link-local addresses (SSRF) unless an explicit safe mode is set, restrict redirects, cap response size, and enforce timeouts.
-- Use CSRF protection if cookie sessions are chosen. Use a CORS allowlist.
+- JWT auth uses short-lived access tokens (30 min) and longer refresh tokens (7 days). `PIVOT_SECRET_KEY` must be changed in production. Use a CORS allowlist.
 
 ## Testing expectations
 

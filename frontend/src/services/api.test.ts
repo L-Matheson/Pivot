@@ -1,15 +1,29 @@
-import { describe, expect, it, vi } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { getHealth } from './api'
+
+const server = setupServer(
+  http.get('/api/health', () => {
+    return HttpResponse.json({ status: 'ok', database: 'ok' })
+  }),
+)
+
+beforeAll(() => server.listen())
+afterEach(() => server.resetHandlers())
+afterAll(() => server.close())
 
 describe('getHealth', () => {
   it('returns the parsed health payload', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'ok' })))
-    await expect(getHealth(fetchFn)).resolves.toEqual({ status: 'ok' })
-    expect(fetchFn).toHaveBeenCalledWith('/api/health')
+    await expect(getHealth()).resolves.toEqual({ status: 'ok', database: 'ok' })
   })
 
   it('throws on a non-2xx response', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response('', { status: 503 }))
-    await expect(getHealth(fetchFn)).rejects.toThrow('503')
+    server.use(
+      http.get('/api/health', () => {
+        return new HttpResponse(null, { status: 503 })
+      }),
+    )
+    await expect(getHealth()).rejects.toThrow('503')
   })
 })
