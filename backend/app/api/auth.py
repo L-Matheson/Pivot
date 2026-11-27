@@ -1,12 +1,14 @@
-"""Authentication routes: register, login, refresh, profile."""
+"""Authentication routes: register, login, refresh, logout, profile."""
 
 import uuid
 
 import jwt
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlmodel import select
 
 from app.core.auth import CurrentUserDep
+from app.core.config import settings
+from app.core.cookies import clear_refresh_cookie, set_refresh_cookie
 from app.core.db import SessionDep
 from app.core.security import (
     create_access_token,
@@ -19,9 +21,7 @@ from app.models.user import User
 from app.schemas.auth import (
     AccessTokenResponse,
     LoginRequest,
-    RefreshRequest,
     RegisterRequest,
-    TokenResponse,
     UserRead,
 )
 
@@ -49,10 +49,9 @@ def register(body: RegisterRequest, session: SessionDep) -> User:
 
 
 @router.post("/login")
-def login(body: LoginRequest, session: SessionDep) -> TokenResponse:
+def login(body: LoginRequest, session: SessionDep, response: Response) -> AccessTokenResponse:
     user = session.exec(select(User).where(User.email == body.email)).first()
 
-    # Intentionally vague — prevents email enumeration.
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Incorrect email or password.",
@@ -67,16 +66,27 @@ def login(body: LoginRequest, session: SessionDep) -> TokenResponse:
     if not verify_password(body.password, user.password_hash):
         raise credentials_error
 
-    return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+    set_refresh_cookie(response, refresh_token)
+
+    return AccessTokenResponse(
+        access_token=access_token,
+        expires_in=settings.access_token_expire_minutes * 60,
     )
 
 
 @router.post("/refresh")
-def refresh(body: RefreshRequest, session: SessionDep) -> AccessTokenResponse:
+def refresh(request: Request, session: SessionDep, response: Response) -> AccessTokenResponse:
+    token = request.cookies.get(settings.cookie_name_refresh)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing refresh token.",
+        )
+
     try:
-        payload = decode_token(body.refresh_token)
+        payload = decode_token(token)
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,9 +126,19 @@ def refresh(body: RefreshRequest, session: SessionDep) -> AccessTokenResponse:
             detail="User not found or deactivated.",
         )
 
+    new_access = create_access_token(str(user.id))
+    new_refresh = create_refresh_token(str(user.id))
+    set_refresh_cookie(response, new_refresh)
+
     return AccessTokenResponse(
-        access_token=create_access_token(str(user.id)),
+        access_token=new_access,
+        expires_in=settings.access_token_expire_minutes * 60,
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response) -> None:
+    clear_refresh_cookie(response)
 
 
 @router.get("/me", response_model=UserRead)

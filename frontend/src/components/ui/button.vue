@@ -14,7 +14,7 @@ const props = withDefaults(
 
 const classes = computed(() =>
   cn(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
     {
       default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
       destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',

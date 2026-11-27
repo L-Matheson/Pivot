@@ -1,49 +1,28 @@
-import { ref, watch } from 'vue'
+import { useDark, useToggle } from '@vueuse/core'
 
-export type ColorMode = 'light' | 'dark' | 'system'
+// color mode
 
-const STORAGE_KEY = 'pivot_color_mode'
+const isDark = useDark({ storageKey: 'pivot_color_mode' })
+const toggleDark = useToggle(isDark)
 
-const colorMode = ref<ColorMode>(
-  (localStorage.getItem(STORAGE_KEY) as ColorMode) || 'system',
-)
-
-const resolvedDark = ref(false)
-
-function applyMode() {
-  const mode = colorMode.value
-  let dark = false
-
-  if (mode === 'dark') {
-    dark = true
-  } else if (mode === 'system') {
-    dark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  }
-
-  resolvedDark.value = dark
-  document.documentElement.classList.toggle('dark', dark)
-}
-
-function setColorMode(mode: ColorMode) {
-  colorMode.value = mode
-  localStorage.setItem(STORAGE_KEY, mode)
-  applyMode()
-}
+// color math
 
 function hexToRgb(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return [r, g, b]
+  const red = parseInt(hex.slice(1, 3), 16)
+  const green = parseInt(hex.slice(3, 5), 16)
+  const blue = parseInt(hex.slice(5, 7), 16)
+  return [red, green, blue]
 }
 
-function relativeLuminance(r: number, g: number, b: number): number {
-  const [rs, gs, bs] = [r, g, b].map((c) => {
-    const s = c / 255
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+function relativeLuminance(red: number, green: number, blue: number): number {
+  const [linearRed, linearGreen, linearBlue] = [red, green, blue].map((channel) => {
+    const normalized = channel / 255
+    return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4)
   })
-  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs
+  return 0.2126 * linearRed + 0.7152 * linearGreen + 0.0722 * linearBlue
 }
+
+// workspace theme
 
 function applyWorkspaceTheme(themeConfig: Record<string, string> | null) {
   const root = document.documentElement
@@ -53,6 +32,7 @@ function applyWorkspaceTheme(themeConfig: Record<string, string> | null) {
     root.style.removeProperty('--primary-foreground')
     root.style.removeProperty('--ring')
     root.style.removeProperty('--accent')
+    root.style.removeProperty('--accent-foreground')
     return
   }
 
@@ -61,31 +41,24 @@ function applyWorkspaceTheme(themeConfig: Record<string, string> | null) {
     root.style.setProperty('--primary', hex)
     root.style.setProperty('--ring', hex)
 
-    const [r, g, b] = hexToRgb(hex)
-    const lum = relativeLuminance(r, g, b)
-    root.style.setProperty('--primary-foreground', lum > 0.4 ? '#0f172a' : '#fafafa')
+    const [red, green, blue] = hexToRgb(hex)
+    const luminance = relativeLuminance(red, green, blue)
+    root.style.setProperty('--primary-foreground', luminance > 0.4 ? '#0f172a' : '#fafafa')
   }
 
   if (themeConfig.accent_color) {
-    root.style.setProperty('--accent', themeConfig.accent_color)
+    const hex = themeConfig.accent_color
+    root.style.setProperty('--accent', hex)
+    const [red, green, blue] = hexToRgb(hex)
+    const luminance = relativeLuminance(red, green, blue)
+    root.style.setProperty('--accent-foreground', luminance > 0.4 ? '#0f172a' : '#fafafa')
   }
-}
-
-function initTheme() {
-  applyMode()
-
-  const mq = window.matchMedia('(prefers-color-scheme: dark)')
-  mq.addEventListener('change', () => {
-    if (colorMode.value === 'system') applyMode()
-  })
 }
 
 export function useTheme() {
   return {
-    colorMode,
-    resolvedDark,
-    setColorMode,
+    isDark,
+    toggleDark,
     applyWorkspaceTheme,
-    initTheme,
   }
 }

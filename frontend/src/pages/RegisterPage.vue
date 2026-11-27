@@ -10,37 +10,43 @@ import UiCard from '@/components/ui/card.vue'
 import UiSpinner from '@/components/ui/spinner.vue'
 import { Workflow } from 'lucide-vue-next'
 
+// routing & stores
+
 const router = useRouter()
 const auth = useAuthStore()
+
+// ui state
 
 const displayName = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const error = ref('')
-const submitting = ref(false)
+const registerError = ref('')
+const isSubmitting = ref(false)
+
+// actions
 
 async function handleSubmit() {
-  error.value = ''
+  registerError.value = ''
 
   if (password.value !== confirmPassword.value) {
-    error.value = 'Passwords do not match.'
+    registerError.value = 'Passwords do not match.'
     return
   }
 
   if (password.value.length < 8) {
-    error.value = 'Password must be at least 8 characters.'
+    registerError.value = 'Password must be at least 8 characters.'
     return
   }
 
-  submitting.value = true
+  isSubmitting.value = true
   try {
     await auth.register(email.value, password.value, displayName.value)
     router.push('/workspaces')
   } catch (e) {
-    error.value = e instanceof ApiError ? e.detail : 'An unexpected error occurred.'
+    registerError.value = e instanceof ApiError ? e.detail : 'An unexpected error occurred.'
   } finally {
-    submitting.value = false
+    isSubmitting.value = false
   }
 }
 </script>
@@ -100,12 +106,12 @@ async function handleSubmit() {
           />
         </div>
 
-        <p v-if="error" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {{ error }}
+        <p v-if="registerError" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {{ registerError }}
         </p>
 
-        <UiButton class="w-full" :disabled="submitting">
-          <UiSpinner v-if="submitting" class="h-4 w-4" />
+        <UiButton class="w-full" :disabled="isSubmitting">
+          <UiSpinner v-if="isSubmitting" class="h-4 w-4" />
           <span v-else>Create account</span>
         </UiButton>
       </form>

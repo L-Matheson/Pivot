@@ -19,6 +19,9 @@ def _make_user(*, email: str = "test@example.com", password: str = "password123"
     )
 
 
+# --- register ---
+
+
 def test_register_success(client: TestClient, session: MagicMock) -> None:
     session.exec.return_value.first.return_value = None
 
@@ -51,6 +54,9 @@ def test_register_short_password(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+# --- login ---
+
+
 def test_login_success(client: TestClient, session: MagicMock) -> None:
     user = _make_user(password="correctpassword")
     session.exec.return_value.first.return_value = user
@@ -62,8 +68,11 @@ def test_login_success(client: TestClient, session: MagicMock) -> None:
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
-    assert "refresh_token" in data
+    assert "expires_in" in data
     assert data["token_type"] == "bearer"
+    assert "refresh_token" not in data
+
+    assert "pivot_refresh" in response.cookies
 
 
 def test_login_wrong_password(client: TestClient, session: MagicMock) -> None:
@@ -88,22 +97,46 @@ def test_login_unknown_email(client: TestClient, session: MagicMock) -> None:
     assert response.status_code == 401
 
 
+# --- refresh ---
+
+
 def test_refresh_success(client: TestClient, session: MagicMock) -> None:
     user = _make_user()
     refresh = create_refresh_token(str(user.id))
     session.get.return_value = user
 
-    response = client.post("/api/auth/refresh", json={"refresh_token": refresh})
+    client.cookies.set("pivot_refresh", refresh, path="/api/auth")
+    response = client.post("/api/auth/refresh")
     assert response.status_code == 200
-    assert "access_token" in response.json()
+    data = response.json()
+    assert "access_token" in data
+    assert "expires_in" in data
+    assert "pivot_refresh" in response.cookies
 
 
 def test_refresh_with_access_token_rejected(client: TestClient, session: MagicMock) -> None:
     user = _make_user()
     access = create_access_token(str(user.id))
 
-    response = client.post("/api/auth/refresh", json={"refresh_token": access})
+    client.cookies.set("pivot_refresh", access, path="/api/auth")
+    response = client.post("/api/auth/refresh")
     assert response.status_code == 401
+
+
+def test_refresh_missing_cookie(client: TestClient) -> None:
+    response = client.post("/api/auth/refresh")
+    assert response.status_code == 401
+
+
+# --- logout ---
+
+
+def test_logout(client: TestClient) -> None:
+    response = client.post("/api/auth/logout")
+    assert response.status_code == 204
+
+
+# --- me ---
 
 
 def test_me_authenticated(client: TestClient, session: MagicMock) -> None:

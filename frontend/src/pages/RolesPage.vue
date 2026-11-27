@@ -2,20 +2,18 @@
 import UiButton from '@/components/ui/button.vue'
 import UiCard from '@/components/ui/card.vue'
 import { Plus, Shield, Lock, MoreHorizontal } from 'lucide-vue-next'
+import type { RoleStub } from '@/types/role'
 
-interface RoleStub {
-  name: string
-  memberCount: number
-  isSystem: boolean
-  fullAccess: boolean
-}
+// data
 
 const roles: RoleStub[] = [
   { name: 'Admin', memberCount: 1, isSystem: true, fullAccess: true },
   { name: 'Member', memberCount: 0, isSystem: true, fullAccess: false },
 ]
 
-const categories = [
+// constants
+
+const permissionCategories = [
   { name: 'Automations', desc: 'view, create, edit, delete' },
   { name: 'Connections', desc: 'view, manage' },
   { name: 'Members', desc: 'view, invite, remove' },
@@ -77,12 +75,12 @@ const categories = [
       <h2 class="mb-3 text-sm font-medium text-muted-foreground">Permission categories</h2>
       <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <div
-          v-for="cat in categories"
-          :key="cat.name"
+          v-for="category in permissionCategories"
+          :key="category.name"
           class="rounded-lg border p-3"
         >
-          <p class="text-sm font-medium">{{ cat.name }}</p>
-          <p class="text-xs text-muted-foreground">{{ cat.desc }}</p>
+          <p class="text-sm font-medium">{{ category.name }}</p>
+          <p class="text-xs text-muted-foreground">{{ category.desc }}</p>
         </div>
       </div>
     </div>

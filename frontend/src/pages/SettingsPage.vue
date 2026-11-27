@@ -3,113 +3,113 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
-import { useTheme, type ColorMode } from '@/composables/useTheme'
-import { ApiError } from '@/services/api'
+import { useUpdateWorkspace, useDeleteWorkspace } from '@/composables/useWorkspaces'
+import { useTheme } from '@/composables/useTheme'
+import { ApiError } from '@/services/api/client'
 import UiButton from '@/components/ui/button.vue'
 import UiCard from '@/components/ui/card.vue'
 import UiInput from '@/components/ui/input.vue'
 import UiLabel from '@/components/ui/label.vue'
 import UiSpinner from '@/components/ui/spinner.vue'
-import { Palette, AlertTriangle, Sun, Moon, Monitor, Check } from 'lucide-vue-next'
+import { Palette, AlertTriangle, Sun, Moon, Check } from 'lucide-vue-next'
+
+// routing & stores
 
 const router = useRouter()
 const workspaceStore = useWorkspaceStore()
 const auth = useAuthStore()
-const { colorMode, setColorMode } = useTheme()
+const { isDark } = useTheme()
 
-const wsName = ref('')
+// mutations
+
+const updateMutation = useUpdateWorkspace()
+const deleteMutation = useDeleteWorkspace()
+
+// ui state: general
+
+const workspaceName = ref('')
 const nameError = ref('')
-const nameSaving = ref(false)
-const nameSaved = ref(false)
+const nameIsSaved = ref(false)
+
+// ui state: theme
 
 const primaryColor = ref('#4F46E5')
 const accentColor = ref('#f0f0f4')
-const themeSaving = ref(false)
-const themeSaved = ref(false)
+const themeIsSaved = ref(false)
 const themeError = ref('')
 
-const deleteConfirm = ref('')
-const deleting = ref(false)
+// ui state: danger zone
+
+const deleteConfirmSlug = ref('')
 const deleteError = ref('')
+
+// computed
 
 const isOwner = computed(
   () => workspaceStore.current?.owner_user_id === auth.user?.id,
 )
 
-onMounted(() => {
-  if (workspaceStore.current) {
-    wsName.value = workspaceStore.current.name
-    const tc = workspaceStore.current.theme_config
-    if (tc) {
-      if (tc.primary_color) primaryColor.value = tc.primary_color
-      if (tc.accent_color) accentColor.value = tc.accent_color
-    }
-  }
-})
+const canDelete = computed(
+  () => deleteConfirmSlug.value === workspaceStore.current?.slug,
+)
+
+// actions
 
 async function saveName() {
   nameError.value = ''
-  nameSaved.value = false
-  if (!wsName.value.trim()) {
+  nameIsSaved.value = false
+  if (!workspaceName.value.trim()) {
     nameError.value = 'Name is required.'
     return
   }
-  nameSaving.value = true
   try {
-    await workspaceStore.updateWorkspace(workspaceStore.current!.id, {
-      name: wsName.value.trim(),
+    await updateMutation.mutateAsync({
+      workspaceId: workspaceStore.current!.id,
+      body: { name: workspaceName.value.trim() },
     })
-    nameSaved.value = true
-    setTimeout(() => (nameSaved.value = false), 2000)
+    nameIsSaved.value = true
+    setTimeout(() => (nameIsSaved.value = false), 2000)
   } catch (e) {
     nameError.value = e instanceof ApiError ? e.detail : 'Failed to save.'
-  } finally {
-    nameSaving.value = false
   }
 }
 
 async function saveTheme() {
   themeError.value = ''
-  themeSaved.value = false
-  themeSaving.value = true
+  themeIsSaved.value = false
   try {
-    await workspaceStore.updateWorkspace(workspaceStore.current!.id, {
-      theme_config: {
-        primary_color: primaryColor.value,
-        accent_color: accentColor.value,
+    await updateMutation.mutateAsync({
+      workspaceId: workspaceStore.current!.id,
+      body: {
+        theme_config: {
+          primary_color: primaryColor.value,
+          accent_color: accentColor.value,
+        },
       },
     })
-    themeSaved.value = true
-    setTimeout(() => (themeSaved.value = false), 2000)
+    themeIsSaved.value = true
+    setTimeout(() => (themeIsSaved.value = false), 2000)
   } catch (e) {
     themeError.value = e instanceof ApiError ? e.detail : 'Failed to save theme.'
-  } finally {
-    themeSaving.value = false
   }
 }
-
-const canDelete = computed(
-  () => deleteConfirm.value === workspaceStore.current?.slug,
-)
 
 async function handleDelete() {
   if (!canDelete.value) return
   deleteError.value = ''
-  deleting.value = true
   try {
-    await workspaceStore.removeWorkspace(workspaceStore.current!.id)
+    await deleteMutation.mutateAsync(workspaceStore.current!.id)
     router.push('/workspaces')
   } catch (e) {
     deleteError.value = e instanceof ApiError ? e.detail : 'Failed to delete workspace.'
-  } finally {
-    deleting.value = false
   }
 }
 
-const colorModes: { value: ColorMode; label: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor },
+// constants
+
+const colorModes = [
+  { dark: false, label: 'Light', icon: Sun },
+  { dark: true, label: 'Dark', icon: Moon },
 ]
 
 const presetColors = [
@@ -122,6 +122,19 @@ const presetColors = [
   '#9333EA',
   '#DB2777',
 ]
+
+// lifecycle
+
+onMounted(() => {
+  if (workspaceStore.current) {
+    workspaceName.value = workspaceStore.current.name
+    const savedTheme = workspaceStore.current.theme_config
+    if (savedTheme) {
+      if (savedTheme.primary_color) primaryColor.value = savedTheme.primary_color
+      if (savedTheme.accent_color) accentColor.value = savedTheme.accent_color
+    }
+  }
+})
 </script>
 
 <template>
@@ -139,7 +152,7 @@ const presetColors = [
       <form @submit.prevent="saveName" class="space-y-4">
         <div class="space-y-2">
           <UiLabel for="ws-name">Workspace name</UiLabel>
-          <UiInput id="ws-name" v-model="wsName" required />
+          <UiInput id="ws-name" v-model="workspaceName" required />
         </div>
         <div class="space-y-2">
           <UiLabel for="ws-slug">URL slug</UiLabel>
@@ -149,10 +162,10 @@ const presetColors = [
         <p v-if="nameError" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {{ nameError }}
         </p>
-        <UiButton size="sm" :disabled="nameSaving">
-          <UiSpinner v-if="nameSaving" class="h-4 w-4" />
-          <Check v-else-if="nameSaved" class="mr-1 h-4 w-4" />
-          <span>{{ nameSaved ? 'Saved' : 'Save changes' }}</span>
+        <UiButton size="sm" :disabled="updateMutation.isPending.value">
+          <UiSpinner v-if="updateMutation.isPending.value" class="h-4 w-4" />
+          <Check v-else-if="nameIsSaved" class="mr-1 h-4 w-4" />
+          <span>{{ nameIsSaved ? 'Saved' : 'Save changes' }}</span>
         </UiButton>
       </form>
     </UiCard>
@@ -166,21 +179,20 @@ const presetColors = [
         <h2 class="font-semibold">Appearance</h2>
       </div>
 
-      <!-- Color mode (personal preference) -->
       <div class="mb-6">
         <UiLabel class="mb-2 block">Color mode</UiLabel>
-        <p class="mb-3 text-xs text-muted-foreground">This is a personal preference and only affects your view.</p>
+        <p class="mb-3 text-xs text-muted-foreground">Defaults to your system preference. Choose below to override.</p>
         <div class="flex gap-2">
           <button
             v-for="mode in colorModes"
-            :key="mode.value"
+            :key="mode.label"
             :class="[
               'flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-              colorMode === mode.value
+              isDark === mode.dark
                 ? 'border-primary bg-primary/15 text-foreground'
                 : 'border-input text-muted-foreground hover:bg-secondary hover:text-foreground',
             ]"
-            @click="setColorMode(mode.value)"
+            @click="isDark = mode.dark"
           >
             <component :is="mode.icon" class="h-4 w-4" />
             {{ mode.label }}
@@ -188,7 +200,6 @@ const presetColors = [
         </div>
       </div>
 
-      <!-- Brand colors (workspace-wide) -->
       <div>
         <UiLabel class="mb-2 block">Brand colors</UiLabel>
         <p class="mb-3 text-xs text-muted-foreground">
@@ -246,10 +257,10 @@ const presetColors = [
         <p v-if="themeError" class="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {{ themeError }}
         </p>
-        <UiButton class="mt-4" size="sm" :disabled="themeSaving" @click="saveTheme">
-          <UiSpinner v-if="themeSaving" class="h-4 w-4" />
-          <Check v-else-if="themeSaved" class="mr-1 h-4 w-4" />
-          <span>{{ themeSaved ? 'Saved' : 'Save theme' }}</span>
+        <UiButton class="mt-4" size="sm" :disabled="updateMutation.isPending.value" @click="saveTheme">
+          <UiSpinner v-if="updateMutation.isPending.value" class="h-4 w-4" />
+          <Check v-else-if="themeIsSaved" class="mr-1 h-4 w-4" />
+          <span>{{ themeIsSaved ? 'Saved' : 'Save theme' }}</span>
         </UiButton>
       </div>
     </UiCard>
@@ -273,7 +284,7 @@ const presetColors = [
           </UiLabel>
           <UiInput
             id="delete-confirm"
-            v-model="deleteConfirm"
+            v-model="deleteConfirmSlug"
             :placeholder="workspaceStore.current?.slug"
           />
         </div>
@@ -283,10 +294,10 @@ const presetColors = [
         <UiButton
           variant="destructive"
           size="sm"
-          :disabled="!canDelete || deleting"
+          :disabled="!canDelete || deleteMutation.isPending.value"
           @click="handleDelete"
         >
-          <UiSpinner v-if="deleting" class="h-4 w-4" />
+          <UiSpinner v-if="deleteMutation.isPending.value" class="h-4 w-4" />
           <span v-else>Delete workspace</span>
         </UiButton>
       </div>

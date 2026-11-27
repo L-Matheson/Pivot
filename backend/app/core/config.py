@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "pivot"
     jwt_audience: str = "pivot"
-    access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 7
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
+
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+    cookie_name_refresh: str = "pivot_refresh"
 
     @model_validator(mode="after")
     def _reject_default_secret_in_production(self) -> "Settings":

@@ -10,26 +10,32 @@ import UiCard from '@/components/ui/card.vue'
 import UiSpinner from '@/components/ui/spinner.vue'
 import { Workflow } from 'lucide-vue-next'
 
+// routing & stores
+
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
+// ui state
+
 const email = ref('')
 const password = ref('')
-const error = ref('')
-const submitting = ref(false)
+const loginError = ref('')
+const isSubmitting = ref(false)
+
+// actions
 
 async function handleSubmit() {
-  error.value = ''
-  submitting.value = true
+  loginError.value = ''
+  isSubmitting.value = true
   try {
     await auth.login(email.value, password.value)
-    const redirect = (route.query.redirect as string) ?? '/workspaces'
-    router.push(redirect)
+    const redirectPath = (route.query.redirect as string) ?? '/workspaces'
+    router.push(redirectPath)
   } catch (e) {
-    error.value = e instanceof ApiError ? e.detail : 'An unexpected error occurred.'
+    loginError.value = e instanceof ApiError ? e.detail : 'An unexpected error occurred.'
   } finally {
-    submitting.value = false
+    isSubmitting.value = false
   }
 }
 </script>
@@ -68,12 +74,12 @@ async function handleSubmit() {
           />
         </div>
 
-        <p v-if="error" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {{ error }}
+        <p v-if="loginError" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {{ loginError }}
         </p>
 
-        <UiButton class="w-full" :disabled="submitting">
-          <UiSpinner v-if="submitting" class="h-4 w-4" />
+        <UiButton class="w-full" :disabled="isSubmitting">
+          <UiSpinner v-if="isSubmitting" class="h-4 w-4" />
           <span v-else>Sign in</span>
         </UiButton>
       </form>

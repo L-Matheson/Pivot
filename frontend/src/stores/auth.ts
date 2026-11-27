@@ -1,17 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getMe, login as apiLogin, register as apiRegister, type UserRead } from '@/services/api'
+import type { UserRead } from '@/types/auth'
+import { login as apiLogin, register as apiRegister, getMe, logout as apiLogout } from '@/services/api/auth'
+import { setAccessToken, clearAccessToken, refreshAccessToken } from '@/services/api/client'
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<UserRead | null>(null)
-  const loading = ref(false)
+  // state
 
-  const isAuthenticated = computed(() => !!localStorage.getItem('access_token'))
+  const user = ref<UserRead | null>(null)
+  const isLoading = ref(false)
+  const initializing = ref(true)
+
+  const isAuthenticated = computed(() => user.value !== null)
+
+  // auth actions
 
   async function login(email: string, password: string) {
     const tokens = await apiLogin(email, password)
-    localStorage.setItem('access_token', tokens.access_token)
-    localStorage.setItem('refresh_token', tokens.refresh_token)
+    setAccessToken(tokens.access_token, tokens.expires_in)
     await fetchUser()
   }
 
@@ -21,24 +27,44 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchUser() {
-    if (!localStorage.getItem('access_token')) return
-    loading.value = true
+    isLoading.value = true
     try {
       user.value = await getMe()
     } catch {
       user.value = null
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      clearAccessToken()
     } finally {
-      loading.value = false
+      isLoading.value = false
+      initializing.value = false
     }
   }
 
-  function logout() {
-    user.value = null
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+  async function restoreSession() {
+    isLoading.value = true
+    try {
+      const refreshed = await refreshAccessToken()
+      if (refreshed) {
+        user.value = await getMe()
+      } else {
+        user.value = null
+      }
+    } catch {
+      user.value = null
+    } finally {
+      isLoading.value = false
+      initializing.value = false
+    }
   }
 
-  return { user, loading, isAuthenticated, login, register, fetchUser, logout }
+  async function logout() {
+    try {
+      await apiLogout()
+    } catch {
+      // Clear client state even if the server call fails
+    }
+    clearAccessToken()
+    user.value = null
+  }
+
+  return { user, isLoading, initializing, isAuthenticated, login, register, fetchUser, restoreSession, logout }
 })

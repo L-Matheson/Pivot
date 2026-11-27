@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, computed, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorkspacesQuery } from '@/composables/useWorkspaces'
 import { useTheme } from '@/composables/useTheme'
 import UiAvatar from '@/components/ui/avatar.vue'
 import UiButton from '@/components/ui/button.vue'
@@ -17,34 +18,20 @@ import {
   ChevronLeft,
 } from 'lucide-vue-next'
 
+// routing & stores
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const workspaceStore = useWorkspaceStore()
 const { applyWorkspaceTheme } = useTheme()
 
+// data & queries
+
 const workspaceId = computed(() => route.params.workspaceId as string)
+const { data: workspaces } = useWorkspacesQuery()
 
-onMounted(async () => {
-  if (workspaceStore.workspaces.length === 0) {
-    await workspaceStore.fetchWorkspaces()
-  }
-  workspaceStore.restoreWorkspace()
-  if (!workspaceStore.current || workspaceStore.current.id !== workspaceId.value) {
-    const found = workspaceStore.workspaces.find((w) => w.id === workspaceId.value)
-    if (found) {
-      workspaceStore.selectWorkspace(found)
-    } else {
-      router.push('/workspaces')
-    }
-  }
-})
-
-watch(
-  () => workspaceStore.current?.theme_config,
-  (config) => applyWorkspaceTheme(config as Record<string, string> | null),
-  { immediate: true },
-)
+// navigation
 
 const navItems = computed(() => [
   { name: 'workflows', label: 'Workflows', icon: Workflow },
@@ -59,11 +46,36 @@ function isActive(routeName: string) {
   return route.name === routeName || (route.name === 'workflow-editor' && routeName === 'workflows')
 }
 
+// actions
+
 function handleLogout() {
   auth.logout()
   workspaceStore.clear()
   router.push('/login')
 }
+
+// watchers
+// Two watches: one syncs the workspace store when the query returns fresh data,
+// the other applies the CSS theme variables whenever the selected workspace changes.
+
+watch(workspaces, (workspaceList) => {
+  if (!workspaceList) return
+  workspaceStore.restoreFromList(workspaceList)
+  if (!workspaceStore.current || workspaceStore.current.id !== workspaceId.value) {
+    const matchingWorkspace = workspaceList.find((workspace) => workspace.id === workspaceId.value)
+    if (matchingWorkspace) {
+      workspaceStore.selectWorkspace(matchingWorkspace)
+    } else {
+      router.push('/workspaces')
+    }
+  }
+}, { immediate: true })
+
+watch(
+  () => workspaceStore.current?.theme_config,
+  (config) => applyWorkspaceTheme(config as Record<string, string> | null),
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -72,7 +84,7 @@ function handleLogout() {
       <div class="flex items-center gap-3 border-b px-4 py-3">
         <RouterLink
           to="/workspaces"
-          class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <ChevronLeft class="h-4 w-4" />
         </RouterLink>

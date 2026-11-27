@@ -19,10 +19,15 @@ import {
 } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 
+// routing
+
 const route = useRoute()
 const workspaceId = route.params.workspaceId as string
 
-const triggers = [
+// node definitions
+// One array per category so the template renders each with its own colored section
+
+const triggerNodeItems = [
   { type: 'trigger', label: 'Manual Run', icon: Play, desc: 'Start by clicking Run' },
   { type: 'trigger', label: 'Email Received', icon: Mail, desc: 'Fires on matching email' },
   { type: 'trigger', label: 'Webhook', icon: Webhook, desc: 'Fires on incoming POST' },
@@ -31,7 +36,7 @@ const triggers = [
   { type: 'trigger', label: 'API Poll', icon: Search, desc: 'Polls an API endpoint' },
 ]
 
-const actions = [
+const actionNodeItems = [
   { type: 'action', label: 'Send Email', icon: Send, desc: 'Send via connected account' },
   { type: 'action', label: 'Send Notification', icon: Bell, desc: 'Notify user or channel' },
   { type: 'action', label: 'Write to Sheet', icon: FileSpreadsheet, desc: 'Append row to spreadsheet' },
@@ -40,16 +45,18 @@ const actions = [
   { type: 'action', label: 'Delay', icon: Timer, desc: 'Wait before continuing' },
 ]
 
-const logic = [
+const logicNodeItems = [
   { type: 'condition', label: 'If / Else', icon: GitBranch, desc: 'Branch on a condition' },
   { type: 'loop', label: 'Loop', icon: Repeat, desc: 'Iterate over a list' },
   { type: 'parallel', label: 'Parallel', icon: GitFork, desc: 'Fan-out to branches' },
 ]
 
-function onDragStart(event: DragEvent, type: string, label: string) {
+// drag handlers
+
+function onDragStart(event: DragEvent, nodeType: string, nodeLabel: string) {
   if (!event.dataTransfer) return
-  event.dataTransfer.setData('application/pivot-node-type', type)
-  event.dataTransfer.setData('application/pivot-node-label', label)
+  event.dataTransfer.setData('application/pivot-node-type', nodeType)
+  event.dataTransfer.setData('application/pivot-node-label', nodeLabel)
   event.dataTransfer.effectAllowed = 'move'
 }
 </script>
@@ -60,7 +67,7 @@ function onDragStart(event: DragEvent, type: string, label: string) {
       <p class="text-xs font-medium text-muted-foreground">Nodes</p>
       <RouterLink
         :to="{ name: 'workflow-help', params: { workspaceId } }"
-        class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
         <HelpCircle class="h-3 w-3" />
         Help
@@ -70,7 +77,7 @@ function onDragStart(event: DragEvent, type: string, label: string) {
     <p class="mb-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">Triggers</p>
     <div class="space-y-1">
       <div
-        v-for="node in triggers"
+        v-for="node in triggerNodeItems"
         :key="node.label"
         class="flex cursor-grab items-center gap-2.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 transition-colors hover:border-emerald-500/40 active:cursor-grabbing"
         draggable="true"
@@ -89,7 +96,7 @@ function onDragStart(event: DragEvent, type: string, label: string) {
     <p class="mb-2 text-xs font-medium text-blue-600 dark:text-blue-400">Actions</p>
     <div class="space-y-1">
       <div
-        v-for="node in actions"
+        v-for="node in actionNodeItems"
         :key="node.label"
         class="flex cursor-grab items-center gap-2.5 rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2 transition-colors hover:border-blue-500/40 active:cursor-grabbing"
         draggable="true"
@@ -108,7 +115,7 @@ function onDragStart(event: DragEvent, type: string, label: string) {
     <p class="mb-2 text-xs font-medium text-amber-600 dark:text-amber-400">Logic</p>
     <div class="space-y-1">
       <div
-        v-for="node in logic"
+        v-for="node in logicNodeItems"
         :key="node.label"
         class="flex cursor-grab items-center gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 transition-colors hover:border-amber-500/40 active:cursor-grabbing"
         draggable="true"

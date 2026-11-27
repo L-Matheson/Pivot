@@ -2,9 +2,13 @@
 import UiButton from '@/components/ui/button.vue'
 import UiCard from '@/components/ui/card.vue'
 import UiAvatar from '@/components/ui/avatar.vue'
+import UiEmptyState from '@/components/ui/empty-state.vue'
 import { UserPlus, Users, Shield, MoreHorizontal } from 'lucide-vue-next'
+import type { MemberStub } from '@/types/member'
 
-const members: unknown[] = []
+// data
+
+const members: MemberStub[] = []
 </script>
 
 <template>
@@ -17,23 +21,18 @@ const members: unknown[] = []
       </UiButton>
     </div>
 
-    <div v-if="members.length === 0" class="py-16 text-center">
-      <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-        <Users class="h-6 w-6 text-muted-foreground" />
-      </div>
-      <h2 class="font-semibold">Just you for now</h2>
-      <p class="mt-1 mx-auto max-w-xs text-sm text-muted-foreground">
-        Invite team members to collaborate on automations in this workspace.
-      </p>
-      <UiButton class="mt-5" size="sm">
-        <UserPlus class="mr-1 h-4 w-4" />
-        Invite member
-      </UiButton>
-    </div>
+    <UiEmptyState
+      v-if="members.length === 0"
+      :icon="Users"
+      title="Just you for now"
+      description="Invite team members to collaborate on automations in this workspace."
+      action-label="Invite member"
+      :action-icon="UserPlus"
+    />
 
     <div v-else>
       <UiCard class="divide-y">
-        <div class="flex items-center justify-between p-4 transition-colors hover:bg-accent/30">
+        <div class="flex items-center justify-between p-4 transition-colors hover:bg-accent hover:text-accent-foreground">
           <div class="flex items-center gap-3">
             <UiAvatar name="Example User" size="sm" />
             <div>

@@ -1,9 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getHealth } from './api'
-
-afterEach(() => {
-  localStorage.clear()
-})
 
 describe('getHealth', () => {
   it('returns the parsed health payload', async () => {

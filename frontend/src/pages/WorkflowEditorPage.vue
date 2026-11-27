@@ -20,13 +20,20 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 
+// routing
+
 const route = useRoute()
 const router = useRouter()
 const workspaceId = route.params.workspaceId as string
-const { resolvedDark } = useTheme()
-const bgColor = computed(() => (resolvedDark.value ? '#1a1a2e' : '#aaaaaa'))
-const bgGap = 16
 
+// canvas configuration
+
+const { isDark } = useTheme()
+const backgroundDotColor = computed(() => (isDark.value ? '#1a1a2e' : '#aaaaaa'))
+const backgroundGap = 16
+
+// node type registry
+// Maps each node type name to its Vue component so VueFlow renders the right one
 const nodeTypes: Record<string, Component> = {
   trigger: markRaw(TriggerNode),
   action: markRaw(ActionNode),
@@ -34,6 +41,8 @@ const nodeTypes: Record<string, Component> = {
   loop: markRaw(LoopNode),
   parallel: markRaw(ParallelNode),
 }
+
+// graph state
 
 const nodes = ref<Node[]>([
   {
@@ -46,6 +55,8 @@ const nodes = ref<Node[]>([
 
 const edges = ref<Edge[]>([])
 
+// vueflow event handlers
+
 const { onConnect, addEdges, onNodesChange, onEdgesChange, applyNodeChanges, applyEdgeChanges } =
   useVueFlow()
 
@@ -53,10 +64,12 @@ onNodesChange((changes) => applyNodeChanges(changes))
 onEdgesChange((changes) => applyEdgeChanges(changes))
 onConnect((params) => addEdges(params))
 
+// drag and drop
+
 function onDrop(event: DragEvent) {
-  const type = event.dataTransfer?.getData('application/pivot-node-type')
-  const label = event.dataTransfer?.getData('application/pivot-node-label')
-  if (!type || !label) return
+  const nodeType = event.dataTransfer?.getData('application/pivot-node-type')
+  const nodeLabel = event.dataTransfer?.getData('application/pivot-node-label')
+  if (!nodeType || !nodeLabel) return
 
   const flowContainer = document.querySelector('.vue-flow') as HTMLElement
   if (!flowContainer) return
@@ -68,10 +81,10 @@ function onDrop(event: DragEvent) {
   }
 
   const newNode: Node = {
-    id: `${type}-${Date.now()}`,
-    type,
+    id: `${nodeType}-${Date.now()}`,
+    type: nodeType,
     position,
-    data: { label },
+    data: { label: nodeLabel },
   }
   nodes.value.push(newNode)
 }
@@ -82,6 +95,8 @@ function onDragOver(event: DragEvent) {
     event.dataTransfer.dropEffect = 'move'
   }
 }
+
+// actions
 
 function goBack() {
   router.push({ name: 'workflows', params: { workspaceId } })
@@ -117,7 +132,7 @@ function goBack() {
           fit-view-on-init
           class="h-full"
         >
-          <Background :color="bgColor" :gap="bgGap" />
+          <Background :color="backgroundDotColor" :gap="backgroundGap" />
           <MiniMap />
           <Controls />
         </VueFlow>

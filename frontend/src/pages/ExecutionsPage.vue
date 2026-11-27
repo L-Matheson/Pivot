@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import UiCard from '@/components/ui/card.vue'
+import UiEmptyState from '@/components/ui/empty-state.vue'
 import { Clock, CheckCircle, XCircle, Loader } from 'lucide-vue-next'
+import type { ExecutionStub } from '@/types/execution'
 
-interface ExecutionStub {
-  id: string
-  workflowName: string
-  status: 'queued' | 'running' | 'succeeded' | 'failed'
-  startedAt: string
-  duration: string
-}
+// data
 
 const executions: ExecutionStub[] = []
+
+// constants
 
 const statusConfig = {
   queued: { icon: Clock, label: 'Queued', class: 'text-muted-foreground', bg: 'bg-muted' },
@@ -27,41 +25,38 @@ const statusConfig = {
       <p class="mt-1 text-sm text-muted-foreground">Past and active workflow runs</p>
     </div>
 
-    <div v-if="executions.length === 0" class="py-16 text-center">
-      <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-        <Clock class="h-6 w-6 text-muted-foreground" />
-      </div>
-      <h2 class="font-semibold">No executions yet</h2>
-      <p class="mt-1 mx-auto max-w-xs text-sm text-muted-foreground">
-        Execution history will appear here once workflows start running.
-      </p>
-    </div>
+    <UiEmptyState
+      v-if="executions.length === 0"
+      :icon="Clock"
+      title="No executions yet"
+      description="Execution history will appear here once workflows start running."
+    />
 
     <UiCard v-else class="divide-y">
       <div
-        v-for="exec in executions"
-        :key="exec.id"
-        class="flex items-center justify-between p-4 transition-colors hover:bg-accent/30"
+        v-for="execution in executions"
+        :key="execution.id"
+        class="flex items-center justify-between p-4 transition-colors hover:bg-accent hover:text-accent-foreground"
       >
         <div class="flex items-center gap-3">
-          <div :class="['rounded-md p-2', statusConfig[exec.status].bg]">
+          <div :class="['rounded-md p-2', statusConfig[execution.status].bg]">
             <component
-              :is="statusConfig[exec.status].icon"
-              :class="['h-4 w-4', statusConfig[exec.status].class]"
+              :is="statusConfig[execution.status].icon"
+              :class="['h-4 w-4', statusConfig[execution.status].class]"
             />
           </div>
           <div>
-            <p class="text-sm font-medium">{{ exec.workflowName }}</p>
-            <p class="text-xs text-muted-foreground">{{ exec.startedAt }}</p>
+            <p class="text-sm font-medium">{{ execution.workflowName }}</p>
+            <p class="text-xs text-muted-foreground">{{ execution.startedAt }}</p>
           </div>
         </div>
         <div class="text-right">
           <span
-            :class="['inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', statusConfig[exec.status].class, statusConfig[exec.status].bg]"
+            :class="['inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', statusConfig[execution.status].class, statusConfig[execution.status].bg]"
           >
-            {{ statusConfig[exec.status].label }}
+            {{ statusConfig[execution.status].label }}
           </span>
-          <p class="mt-0.5 text-xs text-muted-foreground">{{ exec.duration }}</p>
+          <p class="mt-0.5 text-xs text-muted-foreground">{{ execution.duration }}</p>
         </div>
       </div>
     </UiCard>
