@@ -1,17 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { Zap } from 'lucide-vue-next'
+import { SLUG_TO_ICON, FALLBACK_ICONS } from '@/features/workflows/registry'
 
-defineProps<{
-  data: { label: string }
+const props = defineProps<{
+  data: { label: string; nodeType?: string }
+  selected?: boolean
 }>()
+
+const icon = computed(() => {
+  if (props.data.nodeType) return SLUG_TO_ICON[props.data.nodeType]
+  return FALLBACK_ICONS.trigger
+})
 </script>
 
 <template>
-  <div class="rounded-lg border-2 border-emerald-500 bg-card px-4 py-3 shadow-sm min-w-[160px]">
+  <div class="rounded-lg border-2 border-emerald-500 bg-card px-4 py-3 shadow-sm min-w-[160px]" :class="selected && 'ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-background'">
     <div class="flex items-center gap-2">
       <div class="rounded-md bg-emerald-500/10 p-1.5">
-        <Zap class="h-4 w-4 text-emerald-500" />
+        <component :is="icon" class="h-4 w-4 text-emerald-500" />
       </div>
       <div>
         <span class="text-sm font-medium">{{ data.label }}</span>

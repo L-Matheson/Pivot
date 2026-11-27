@@ -4,11 +4,12 @@ import { GitBranch } from 'lucide-vue-next'
 
 defineProps<{
   data: { label: string }
+  selected?: boolean
 }>()
 </script>
 
 <template>
-  <div class="rounded-lg border-2 border-amber-500 bg-card px-4 py-3 shadow-sm min-w-[160px]">
+  <div class="rounded-lg border-2 border-amber-500 bg-card px-4 py-3 shadow-sm min-w-[160px]" :class="selected && 'ring-2 ring-amber-500/50 ring-offset-2 ring-offset-background'">
     <Handle type="target" :position="Position.Top" class="!bg-amber-500 !h-3 !w-3 !border-2 !border-white dark:!border-neutral-800" />
     <div class="flex items-center gap-2">
       <div class="rounded-md bg-amber-500/10 p-1.5">

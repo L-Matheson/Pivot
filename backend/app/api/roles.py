@@ -7,11 +7,28 @@ from sqlmodel import select
 
 from app.core.auth import PermissionRequired
 from app.core.db import SessionDep
+from app.core.permission_registry import is_valid_permission
 from app.models.role import Role
 from app.models.workspace import WorkspaceMembership
 from app.schemas.role import RoleCreate, RoleRead, RoleUpdate
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/roles", tags=["roles"])
+
+
+def _validate_permissions(permissions: dict) -> None:
+    invalid = []
+    for resource, actions in permissions.items():
+        if not isinstance(actions, dict):
+            invalid.append(f"'{resource}' value must be an object")
+            continue
+        for action in actions:
+            if not is_valid_permission(resource, action):
+                invalid.append(f"'{resource}.{action}'")
+    if invalid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid permissions: {', '.join(invalid)}",
+        )
 
 
 @router.get(
@@ -50,6 +67,8 @@ def create_role(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A role named '{body.name}' already exists in this workspace.",
         )
+
+    _validate_permissions(body.permissions)
 
     role = Role(
         workspace_id=workspace_id,
@@ -107,6 +126,7 @@ def update_role(
     if body.name is not None:
         role.name = body.name
     if body.permissions is not None:
+        _validate_permissions(body.permissions)
         role.permissions = body.permissions
 
     session.add(role)

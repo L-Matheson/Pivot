@@ -2,68 +2,64 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import UiButton from '@/components/ui/button.vue'
+import CollapsibleSection from '@/components/ui/collapsible-section.vue'
+import type { CollapsibleItem } from '@/components/ui/collapsible-section.vue'
 import { ArrowLeft } from 'lucide-vue-next'
-import NodeSection from '@/features/workflows/help/NodeSection.vue'
-import { triggerNodes } from '@/features/workflows/help/triggerNodes'
-import { actionNodes } from '@/features/workflows/help/actionNodes'
-import { logicNodes } from '@/features/workflows/help/logicNodes'
-import type { NodeDoc, SectionDef } from '@/features/workflows/help/types'
-import { sectionHeaderColor } from '@/features/workflows/help/types'
+import { CATEGORY_SECTIONS, buildHelpItems } from '@/features/workflows/registry'
+
+const sectionHeaderColor: Record<string, string> = {
+  emerald: 'text-emerald-600 dark:text-emerald-400',
+  blue: 'text-blue-600 dark:text-blue-400',
+  amber: 'text-amber-600 dark:text-amber-400',
+}
 
 // routing
 
 const router = useRouter()
 
-// data
+// data — derived from registry
 
-const sections: SectionDef[] = [
-  { id: 'triggers', label: 'Triggers', color: 'emerald', desc: 'Events that start a workflow. Every workflow needs exactly one trigger.' },
-  { id: 'actions', label: 'Actions', color: 'blue', desc: 'Operations that do something: send a message, call an API, write data, or reshape output.' },
-  { id: 'logic', label: 'Logic', color: 'amber', desc: 'Control flow: branch, loop, or run steps in parallel.' },
-]
-
-const allNodes = computed<NodeDoc[]>(() => [...triggerNodes, ...actionNodes, ...logicNodes])
+const sections = CATEGORY_SECTIONS
+const triggerItems = buildHelpItems('trigger') as CollapsibleItem[]
+const actionItems = buildHelpItems('action') as CollapsibleItem[]
+const logicItems = buildHelpItems('logic') as CollapsibleItem[]
+const allItems = computed<CollapsibleItem[]>(() => [...triggerItems, ...actionItems, ...logicItems])
 
 // ui state
 
 const searchQuery = ref('')
 const activeSection = ref('triggers')
-const expandedNodes = ref<Set<string>>(new Set())
+const expandedItems = ref<Set<string>>(new Set())
 
-
-function matchesSearch(node: NodeDoc): boolean {
+function matchesSearch(item: CollapsibleItem): boolean {
   if (!searchQuery.value) return true
   const lowerQuery = searchQuery.value.toLowerCase()
-  return node.label.toLowerCase().includes(lowerQuery) || node.what.toLowerCase().includes(lowerQuery)
+  return item.label.toLowerCase().includes(lowerQuery) || item.what.toLowerCase().includes(lowerQuery)
 }
 
+// computed — one filtered list per section
 
-// computed
-
-// One filtered list per section so the template can show/hide each independently
-const filteredTriggers = computed(() => triggerNodes.filter(matchesSearch))
-const filteredActions = computed(() => actionNodes.filter(matchesSearch))
-const filteredLogic = computed(() => logicNodes.filter(matchesSearch))
+const filteredTriggers = computed(() => triggerItems.filter(matchesSearch))
+const filteredActions = computed(() => actionItems.filter(matchesSearch))
+const filteredLogic = computed(() => logicItems.filter(matchesSearch))
 
 // actions
 
-function toggleNode(id: string) {
-  if (expandedNodes.value.has(id)) {
-    expandedNodes.value.delete(id)
+function toggleItem(id: string) {
+  if (expandedItems.value.has(id)) {
+    expandedItems.value.delete(id)
   } else {
-    expandedNodes.value.add(id)
+    expandedItems.value.add(id)
   }
 }
 
 function expandAll() {
-  allNodes.value.forEach((node) => expandedNodes.value.add(node.id))
+  allItems.value.forEach((item) => expandedItems.value.add(item.id))
 }
 
 function collapseAll() {
-  expandedNodes.value.clear()
+  expandedItems.value.clear()
 }
-
-// scroll tracking
 
 function scrollToSection(sectionId: string) {
   activeSection.value = sectionId
@@ -128,36 +124,36 @@ function handleScroll(event: Event) {
       </div>
     </header>
 
-    <div class="help-scroll-container flex-1 overflow-y-auto" @scroll="handleScroll">
+    <div class="flex-1 overflow-y-auto" @scroll="handleScroll">
       <div class="mx-auto max-w-3xl px-6 py-8">
-        <NodeSection
+        <CollapsibleSection
           id="triggers"
           title="Triggers"
-          :description="sections[0].desc"
+          :description="sections[0].description"
           color="emerald"
-          :nodes="filteredTriggers"
-          :expanded="expandedNodes"
-          @toggle="toggleNode"
+          :items="filteredTriggers"
+          :expanded="expandedItems"
+          @toggle="toggleItem"
         />
 
-        <NodeSection
+        <CollapsibleSection
           id="actions"
           title="Actions"
-          :description="sections[1].desc"
+          :description="sections[1].description"
           color="blue"
-          :nodes="filteredActions"
-          :expanded="expandedNodes"
-          @toggle="toggleNode"
+          :items="filteredActions"
+          :expanded="expandedItems"
+          @toggle="toggleItem"
         />
 
-        <NodeSection
+        <CollapsibleSection
           id="logic"
           title="Logic"
-          :description="sections[2].desc"
+          :description="sections[2].description"
           color="amber"
-          :nodes="filteredLogic"
-          :expanded="expandedNodes"
-          @toggle="toggleNode"
+          :items="filteredLogic"
+          :expanded="expandedItems"
+          @toggle="toggleItem"
         />
 
         <div

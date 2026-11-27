@@ -2,23 +2,17 @@
 import UiButton from '@/components/ui/button.vue'
 import UiCard from '@/components/ui/card.vue'
 import UiEmptyState from '@/components/ui/empty-state.vue'
-import { Plus, Plug, Mail, FileSpreadsheet, MessageSquare, Globe, Database, Webhook } from 'lucide-vue-next'
+import { Plus, Plug } from 'lucide-vue-next'
 import type { ConnectionStub } from '@/types/connection'
+import { CONNECTOR_REGISTRY } from '@/features/connections/registry'
 
 // data
 
 const connections: ConnectionStub[] = []
 
-// constants
+// constants — derived from registry
 
-const availableIntegrations = [
-  { name: 'Gmail', icon: Mail, color: 'text-red-500', bg: 'bg-red-500/10' },
-  { name: 'Google Sheets', icon: FileSpreadsheet, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { name: 'Slack', icon: MessageSquare, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  { name: 'Webhook', icon: Webhook, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-  { name: 'HTTP API', icon: Globe, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { name: 'PostgreSQL', icon: Database, color: 'text-sky-600', bg: 'bg-sky-500/10' },
-]
+const availableIntegrations = CONNECTOR_REGISTRY
 </script>
 
 <template>

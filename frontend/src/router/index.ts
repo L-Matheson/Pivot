@@ -33,17 +33,17 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'workflows',
         name: 'workflows',
-        component: () => import('@/pages/WorkflowsPage.vue'),
+        component: () => import('@/pages/workflows/WorkflowsPage.vue'),
       },
       {
         path: 'workflows/help',
         name: 'workflow-help',
-        component: () => import('@/pages/WorkflowHelpPage.vue'),
+        component: () => import('@/pages/workflows/WorkflowHelpPage.vue'),
       },
       {
         path: 'workflows/:workflowId',
         name: 'workflow-editor',
-        component: () => import('@/pages/WorkflowEditorPage.vue'),
+        component: () => import('@/pages/workflows/WorkflowEditorPage.vue'),
       },
       {
         path: 'connections',

@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import UiButton from '@/components/ui/button.vue'
 import UiCard from '@/components/ui/card.vue'
 import { Plus, Shield, Lock, MoreHorizontal } from 'lucide-vue-next'
 import type { RoleStub } from '@/types/role'
+import { usePermissionCatalog } from '@/composables/usePermissions'
 
 // data
 
@@ -11,16 +13,15 @@ const roles: RoleStub[] = [
   { name: 'Member', memberCount: 0, isSystem: true, fullAccess: false },
 ]
 
-// constants
+// constants — derived from backend permission registry
 
-const permissionCategories = [
-  { name: 'Automations', desc: 'view, create, edit, delete' },
-  { name: 'Connections', desc: 'view, manage' },
-  { name: 'Members', desc: 'view, invite, remove' },
-  { name: 'Roles', desc: 'view, manage' },
-  { name: 'Settings', desc: 'view, edit' },
-  { name: 'Stats', desc: 'view' },
-]
+const { data: permissionResources } = usePermissionCatalog()
+const permissionCategories = computed(() =>
+  (permissionResources.value ?? []).map((r) => ({
+    name: r.label,
+    desc: r.actions.map((a) => a.label.toLowerCase()).join(', '),
+  })),
+)
 </script>
 
 <template>

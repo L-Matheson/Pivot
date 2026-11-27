@@ -2,7 +2,7 @@
 
 Checklist tracking implementation progress. Build order follows `IMPLEMENTATION_PLAN.md`. Tick items as they're done.
 
-_Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi-tenant SaaS automation platform)_
+_Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integration)_
 
 ---
 
@@ -26,7 +26,7 @@ _Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi
 - [x] User model with bcrypt password hashing
 - [x] Workspace and WorkspaceMembership models (owner/editor/viewer)
 - [x] JWT auth with issuer/audience validation, production secret enforcement
-- [x] Auth API (register, login, refresh, /me)
+- [x] Auth API (register, login, refresh, logout, /me)
 - [x] Workspace CRUD + membership management
 - [x] Swagger docs disabled in production
 - [x] 21 backend tests, 6 frontend tests — all passing
@@ -45,15 +45,22 @@ _Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi
 - [x] Unique constraint on `(workspace_id, name)` for role names
 - [x] Split routes: workspaces.py, members.py, roles.py
 - [x] 38 backend tests passing
-- [ ] Folder and tag fields on workflows for permission scoping (deferred to Step 5: Workflow Storage)
+- [x] Folder and tag fields on workflows for permission scoping
 
-### Step 5: Workflow Storage
+### Step 5: Workflow Storage (done)
 
-- [ ] Workflow Pydantic models (definition schema: schema_version, nodes, edges)
-- [ ] SQLModel Workflow table (workspace_id, name, description, folder, tags, definition JSONB)
-- [ ] CRUD API: list (permission-filtered), create, read, update, archive, duplicate, import, export
-- [ ] Workflow schema validation (reject cycles, validate node types against registry)
-- [ ] Migration and tests
+- [x] Workflow Pydantic models (definition schema: schema_version, nodes, edges, with nested validation)
+- [x] SQLModel Workflow table (workspace_id, name, description, folder, tags JSONB, definition JSONB, is_active, is_archived, created_by)
+- [x] CRUD API: list (permission-filtered), create, read, update, archive, duplicate, delete
+- [x] Workflow schema validation (cycle detection via DFS, orphan edge detection, duplicate node ID check)
+- [x] Graph validation utilities (app/core/graph.py)
+- [x] Migration and 14 backend tests
+- [x] Frontend: node type slug mapping (nodeTypes.ts), API service, TanStack Query composable
+- [x] Frontend: create-first flow (dialog → API create → editor with real ID, workflow persists if user leaves)
+- [x] Frontend: editor loads/saves workflow definition to backend (VueFlow ↔ backend format conversion)
+- [x] Frontend: node config panel (per-type fields, connection warnings for nodes requiring a connected account)
+- [x] Frontend: node selection highlight (ring on selected node)
+- [ ] Import/export endpoints (deferred — JSON export/import of workflow definitions)
 
 ### Step 6: Connection Infrastructure
 
@@ -106,20 +113,20 @@ _Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi
 
 ### Step 10: Theming Infrastructure
 
-- [ ] CSS custom property system (all colors from variables)
-- [ ] Theme provider composable (reads workspace theme_config)
-- [ ] Light and dark mode
+- [x] CSS custom property system (all colors from variables)
+- [x] Theme provider composable (reads workspace theme_config, uses VueUse useDark)
+- [x] Light and dark mode (VueUse useDark, persisted to localStorage)
 - [ ] Theme settings API (admin-only)
-- [ ] Color picker in workspace settings
+- [x] Color picker in workspace settings
 
 ### Step 11: Auth and Workspace UI
 
-- [ ] Login and registration pages
-- [ ] Workspace selector
-- [ ] Workspace settings (name, theme, roles)
+- [x] Login and registration pages
+- [x] Workspace selector
+- [x] Workspace settings (name, theme, danger zone)
 - [ ] Member management (invite, assign roles)
 - [ ] Custom role editor
-- [ ] Vue Router with auth guards, Pinia stores
+- [x] Vue Router with auth guards, Pinia stores
 
 ### Step 12: Visual Workflow Editor
 
@@ -170,7 +177,7 @@ _Last updated: 2026-11-26 (Steps 1–4 complete, project scope expanded to multi
 
 | Decision | Status | Choice |
 |---|---|---|
-| Authentication | ✅ | JWT (access + refresh) |
+| Authentication | ✅ | In-memory access token (15 min) + httpOnly cookie refresh token (30 days) |
 | Permission model | ✅ | System roles (admin/member) + custom roles, folder/tag scoping |
 | Deployment model | ✅ | Multi-tenant SaaS |
 | Integration auth | ✅ | OAuth first, API keys as fallback |

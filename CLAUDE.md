@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pivot is a multi-tenant SaaS business automation platform (Vue 3 + FastAPI + Celery). Organizations connect their systems (email, databases, APIs, spreadsheets, messaging) and build visual workflows that trigger and act automatically. The target user is non-technical — a drag-and-drop visual builder, no code.
 
-`IMPLEMENTATION_PLAN.md` is the authoritative spec. Currently: FastAPI backend with JWT auth, User/Workspace/WorkspaceMembership models with custom Role model (JSONB permissions, system admin/member roles + workspace-scoped custom roles), PostgreSQL via SQLModel + Alembic with auto-migrations, Vue 3 + TS frontend (Vite), Docker Compose dev stack. No Celery, workflow storage, or connections yet.
+`IMPLEMENTATION_PLAN.md` is the authoritative spec. Currently: FastAPI backend with JWT auth (split-token: in-memory access + httpOnly cookie refresh), User/Workspace/WorkspaceMembership/Role/Workflow models, PostgreSQL via SQLModel + Alembic with auto-migrations, Vue 3 + TS frontend (Vite) with VueFlow workflow editor, Docker Compose dev stack. No Celery or connections yet.
 
-**Next step:** Step 5 — Workflow Storage (Workflow model with JSONB definition, folder/tag scoping, CRUD API with permission filtering). See `docs/NEXT_STEPS.md`.
+**Next step:** Step 6 — Connection Infrastructure (encrypted credential store, connector registry, OAuth2 flow, Google OAuth connector). See `docs/NEXT_STEPS.md`.
 
 **First milestone target:** a signed-in user connects a Gmail account, creates a workflow that triggers on a labeled email, sends a notification, and writes to a Google Sheet — all through the visual editor.
 
