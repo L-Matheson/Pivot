@@ -1,8 +1,18 @@
 """Workspace request/response schemas."""
 
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class ThemeConfig(BaseModel):
+    primary_color: str | None = Field(
+        default=None, pattern=r"^#[0-9a-fA-F]{6}$", description="Hex color code"
+    )
+    accent_color: str | None = Field(
+        default=None, pattern=r"^#[0-9a-fA-F]{6}$", description="Hex color code"
+    )
 
 
 class WorkspaceCreate(BaseModel):
@@ -16,6 +26,7 @@ class WorkspaceCreate(BaseModel):
 
 class WorkspaceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=150)
+    theme_config: ThemeConfig | None = None
 
 
 class WorkspaceRead(BaseModel):
@@ -23,6 +34,7 @@ class WorkspaceRead(BaseModel):
     name: str
     slug: str
     owner_user_id: uuid.UUID
+    theme_config: dict[str, Any] | None = None
 
 
 class MemberAdd(BaseModel):

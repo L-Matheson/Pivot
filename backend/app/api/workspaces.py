@@ -89,6 +89,10 @@ def update_workspace(
 
     if body.name is not None:
         workspace.name = body.name
+    if body.theme_config is not None:
+        existing = workspace.theme_config or {}
+        patch = body.theme_config.model_dump(exclude_none=True)
+        workspace.theme_config = {**existing, **patch}
 
     session.add(workspace)
     session.commit()

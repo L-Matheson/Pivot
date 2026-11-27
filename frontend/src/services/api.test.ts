@@ -1,29 +1,27 @@
-import { http, HttpResponse } from 'msw'
-import { setupServer } from 'msw/node'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getHealth } from './api'
 
-const server = setupServer(
-  http.get('/api/health', () => {
-    return HttpResponse.json({ status: 'ok', database: 'ok' })
-  }),
-)
-
-beforeAll(() => server.listen())
-afterEach(() => server.resetHandlers())
-afterAll(() => server.close())
+afterEach(() => {
+  localStorage.clear()
+})
 
 describe('getHealth', () => {
   it('returns the parsed health payload', async () => {
-    await expect(getHealth()).resolves.toEqual({ status: 'ok', database: 'ok' })
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ status: 'ok', database: 'ok' }),
+    })
+    await expect(getHealth(mockFetch)).resolves.toEqual({ status: 'ok', database: 'ok' })
   })
 
   it('throws on a non-2xx response', async () => {
-    server.use(
-      http.get('/api/health', () => {
-        return new HttpResponse(null, { status: 503 })
-      }),
-    )
-    await expect(getHealth()).rejects.toThrow('503')
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve({ detail: 'Service Unavailable' }),
+    })
+    await expect(getHealth(mockFetch)).rejects.toThrow('Service Unavailable')
   })
 })

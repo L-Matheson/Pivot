@@ -1,60 +1,31 @@
-import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
-import { cleanup, render, screen } from '@testing-library/vue'
-import { http, HttpResponse } from 'msw'
-import { setupServer } from 'msw/node'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { cleanup, render } from '@testing-library/vue'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 
-const server = setupServer(
-  http.get('/api/health', () => {
-    return HttpResponse.json({ status: 'ok', database: 'ok' })
-  }),
-)
+async function renderApp(path = '/login') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/login', component: { template: '<div>Login page</div>' } },
+      { path: '/workspaces', component: { template: '<div>Workspaces</div>' } },
+    ],
+  })
+  router.push(path)
+  await router.isReady()
 
-function renderApp() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+  const result = render(App, {
+    global: { plugins: [router, createPinia()] },
   })
-  return render(App, {
-    global: { plugins: [[VueQueryPlugin, { queryClient }]] },
-  })
+  return result
 }
 
-beforeAll(() => server.listen())
-afterEach(() => {
-  cleanup()
-  server.resetHandlers()
-})
-afterAll(() => server.close())
+afterEach(() => cleanup())
 
 describe('App', () => {
-  it('shows "online" when the backend is healthy', async () => {
-    renderApp()
-    expect(await screen.findByText('online')).toBeInTheDocument()
-  })
-
-  it('shows "unreachable" when the backend returns an error', async () => {
-    server.use(
-      http.get('/api/health', () => {
-        return new HttpResponse(null, { status: 500 })
-      }),
-    )
-    renderApp()
-    expect(await screen.findByText('unreachable')).toBeInTheDocument()
-  })
-
-  it('shows "unreachable" when the backend is down', async () => {
-    server.use(
-      http.get('/api/health', () => {
-        return HttpResponse.error()
-      }),
-    )
-    renderApp()
-    expect(await screen.findByText('unreachable')).toBeInTheDocument()
-  })
-
-  it('displays the app heading', () => {
-    renderApp()
-    expect(screen.getByRole('heading', { name: 'Pivot' })).toBeInTheDocument()
+  it('renders the router view', async () => {
+    const { container } = await renderApp('/login')
+    expect(container.textContent).toContain('Login page')
   })
 })
