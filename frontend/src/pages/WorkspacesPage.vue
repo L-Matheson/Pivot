@@ -58,8 +58,8 @@ async function handleCreate() {
   }
 }
 
-function handleLogout() {
-  auth.logout()
+async function handleLogout() {
+  await auth.logout()
   workspaceStore.clear()
   router.push('/login')
 }
@@ -148,7 +148,7 @@ watch(workspaces, (workspaceList) => {
         <button
           v-for="workspace in workspaces"
           :key="workspace.id"
-          class="group flex w-full items-center gap-4 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+          class="group flex w-full items-center gap-4 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary"
           @click="enterWorkspace(workspace)"
         >
           <UiAvatar :name="workspace.name" />

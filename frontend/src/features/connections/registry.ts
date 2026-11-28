@@ -15,7 +15,7 @@ export interface ConnectorDefinition {
 }
 
 const definitions: ConnectorDefinition[] = [
-  { slug: 'gmail',          name: 'Gmail',         icon: Mail,            color: 'text-red-500',     bg: 'bg-red-500/10',     authMethod: 'oauth2',            status: 'available' },
+  { slug: 'google_gmail',    name: 'Gmail',         icon: Mail,            color: 'text-red-500',     bg: 'bg-red-500/10',     authMethod: 'oauth2',            status: 'available' },
   { slug: 'google_sheets',  name: 'Google Sheets',  icon: FileSpreadsheet, color: 'text-emerald-500', bg: 'bg-emerald-500/10', authMethod: 'oauth2',            status: 'available' },
   { slug: 'slack',          name: 'Slack',          icon: MessageSquare,   color: 'text-purple-500',  bg: 'bg-purple-500/10',  authMethod: 'oauth2',            status: 'coming_soon' },
   { slug: 'webhook',        name: 'Webhook',        icon: Webhook,         color: 'text-orange-500',  bg: 'bg-orange-500/10',  authMethod: 'none',              status: 'available' },

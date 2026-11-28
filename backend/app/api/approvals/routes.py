@@ -136,7 +136,6 @@ def decide_approval(
             detail="User role not found.",
         )
 
-    # Allow if user has the required role, or has full_access (admin)
     if membership.role_id != approval.required_role_id and not user_role.full_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -56,7 +56,16 @@ npm run build
 
 ## Backend structure
 
-`app/main.py` builds the app with `create_app()`. Each resource gets one module in `app/api/` (e.g. `app/api/health.py`) that declares its own `APIRouter(prefix="/<resource>", tags=[...])`. `app/api/__init__.py` mounts them all under `/api`. Register a new module there. The URL has no version segment, because API versioning is handled through git and GitHub releases, not URL paths or folders. Settings live in `app/core/config.py` (pydantic-settings). Env vars use the `PIVOT_` prefix and can also come from `backend/.env`, e.g. `PIVOT_CORS_ORIGINS='["http://localhost:5173"]'`.
+`app/main.py` builds the app with `create_app()`. Each resource is a **package** (folder) in `app/api/` — not a flat `.py` file. The package structure:
+
+- `routes.py` — route handler functions on an `APIRouter(prefix="/<resource>", tags=[...])`.
+- `commands.py` — shared business logic used by multiple routes (e.g. "get entity or 404"). Only when needed.
+- `utils.py` — pure helper functions (no DB session, no request context). Only when needed.
+- `__init__.py` — re-exports `router` from `routes.py`. For multi-file splits, combines sub-routers via `include_router`.
+
+For packages split into multiple route files (e.g. `connections/` with `routes.py` + `oauth.py`): each sub-module defines its own `APIRouter` with the full prefix, and `__init__.py` combines them on a prefix-less wrapper.
+
+`app/api/__init__.py` mounts all packages under `/api`. Register a new module there. The URL has no version segment, because API versioning is handled through git and GitHub releases, not URL paths or folders. Settings live in `app/core/config.py` (pydantic-settings). Env vars use the `PIVOT_` prefix and can also come from `backend/.env`, e.g. `PIVOT_CORS_ORIGINS='["http://localhost:5173"]'`.
 
 Database: `app/core/db.py` provides a lazy engine (created on first use, not at import time), a `get_session` dependency, and a `SessionDep` type alias. Table models go in `app/models/` as SQLModel `table=True` classes; each new model file must be imported in `app/models/__init__.py` so Alembic sees it. Shared field factories (`id_field`, `created_at_field`, `updated_at_field`) live in `app/models/base.py`. Alembic config is in `backend/alembic.ini`; `alembic/env.py` reads `PIVOT_DATABASE_URL` from settings. Migrations in `alembic/versions/` are auto-generated and auto-applied by `npm run up`.
 
@@ -73,6 +82,7 @@ The frontend calls the backend only through relative `/api/...` URLs in `src/ser
 - **Reuse rule:** if an API function, interface, or composable is used in more than one file, it must be extracted into its own domain file and imported — never duplicated inline.
 - **No prop drilling.** When data or callbacks would pass through an intermediate component that doesn't use them, choose one of: (1) `provide`/`inject` for page-scoped state shared with deeply nested descendants — pair a `provideXxx()` call in the ancestor with a `useXxx()` inject helper in the consumer, both in the same composable file; (2) a shared composable when the state is derived from an external source (API, browser) rather than owned by a single page; (3) a Pinia store when the state is app-global (current user, current workspace). Never relay a prop or re-emit an event through a component that is just passing it along. **Exception:** passing data through 1–3 levels is fine when intermediate components have a legitimate relationship or responsibility (e.g. a Section that resolves `.has()` before passing a boolean to a Card). Don't introduce provide/inject for shallow chains — that's overkill.
 
+- **v-if chain limit.** `v-if / v-else-if / v-else` chains are acceptable for 2–4 mutually exclusive UI states. Beyond that, use a `Record<string, Component>` lookup map and `<component :is>` with a computed resolver. Each variant becomes its own SFC in a co-located folder (e.g. `components/config/`), and the index barrel exports the map. New variants are added by creating a component and adding one line to the map — no template changes in the parent.
 - **Readable names and file sections.** Variable names must be plain English and state what they hold — `lowerSearchQuery` not `q`, `matchingWorkspaces` not `res`. Within each `<script setup>` block, group declarations under minimal lowercase section comments: `// routing`, `// data`, `// ui state`, `// computed`, `// actions`. When several computed/watch/function declarations are stacked, add a one-line comment above the group explaining *why* they exist as a set (e.g. "One filtered list per section so the template can show/hide each independently"). Watchers (`watch`, `onMounted`, `onUnmounted`) go at the bottom of the `<script setup>` block, after all functions and constants.
 
 Before implementing anything, read the relevant section of `IMPLEMENTATION_PLAN.md` and check `docs/NEXT_STEPS.md`, the user-facing checklist. Update it when a step or decision is completed.

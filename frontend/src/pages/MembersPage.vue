@@ -32,7 +32,7 @@ const members: MemberStub[] = []
 
     <div v-else>
       <UiCard class="divide-y">
-        <div class="flex items-center justify-between p-4 transition-colors hover:bg-accent hover:text-accent-foreground">
+        <div class="flex items-center justify-between p-4 transition-colors hover:bg-muted">
           <div class="flex items-center gap-3">
             <UiAvatar name="Example User" size="sm" />
             <div>

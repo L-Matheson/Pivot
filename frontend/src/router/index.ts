@@ -51,6 +51,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/ConnectionsPage.vue'),
       },
       {
+        path: 'connections/oauth/:provider/callback',
+        name: 'oauth-callback',
+        component: () => import('@/pages/OAuthCallbackPage.vue'),
+      },
+      {
         path: 'members',
         name: 'members',
         component: () => import('@/pages/MembersPage.vue'),

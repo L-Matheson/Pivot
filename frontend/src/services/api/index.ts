@@ -23,6 +23,15 @@ export {
   getApproval,
   decideApproval,
 } from './approvals'
+export {
+  listConnections,
+  getConnection,
+  deleteConnection,
+  testConnection,
+  oauthAuthorize,
+  oauthCallback,
+} from './connections'
+export { listConnectors } from './connectors'
 
 export type { HealthResponse } from '@/types/health'
 export type { UserRead, AccessTokenResponse } from '@/types/auth'
@@ -36,4 +45,19 @@ export type {
 } from '@/types/workflow'
 export type { RoleRead } from '@/types/role'
 export type { PermissionResource, PermissionAction } from '@/types/permission'
+export { runWorkflow, listExecutions, getExecution } from './executions'
 export type { ApprovalRequest } from '@/types/approval'
+export type {
+  ConnectionRead,
+  ConnectionListItem,
+  OAuthAuthorizeResponse,
+  ConnectionTestResult,
+  ConnectorInfo,
+} from '@/types/connection'
+export type {
+  WorkflowRunResponse,
+  NodeResultResponse,
+  ExecutionListItem,
+  ExecutionDetail,
+  NodeExecutionDetail,
+} from '@/types/execution'

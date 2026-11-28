@@ -2,7 +2,7 @@
 
 Checklist tracking implementation progress. Build order follows `IMPLEMENTATION_PLAN.md`. Tick items as they're done.
 
-_Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integration)_
+_Last updated: 2026-11-28 (Steps 1–6 complete, Step 7 mostly done — executors + branching runner)_
 
 ---
 
@@ -62,30 +62,36 @@ _Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integ
 - [x] Frontend: node selection highlight (ring on selected node)
 - [ ] Import/export endpoints (deferred — JSON export/import of workflow definitions)
 
-### Step 6: Connection Infrastructure
+### Step 6: Connection Infrastructure (done)
 
-- [ ] Connection model (workspace_id, provider, auth_type, credentials_encrypted)
-- [ ] PIVOT_ENCRYPTION_KEY setting and encryption utilities
-- [ ] Connector registry (provider definitions with auth config)
-- [ ] Connection CRUD API (create, list, test, delete — credentials never returned)
-- [ ] OAuth2 flow: authorize URL endpoint, callback handler, token refresh
-- [ ] API key and connection string storage (encrypted)
-- [ ] Google OAuth connector (Gmail + Sheets) — first provider
-- [ ] Migration and tests
+- [x] Connection model (workspace_id, provider, auth_type, credentials_encrypted)
+- [x] PIVOT_ENCRYPTION_KEY setting and encryption utilities (Fernet-based)
+- [x] Connector registry (provider definitions with auth config)
+- [x] Connection CRUD API (create, list, get, test, delete — credentials never returned)
+- [x] OAuth2 flow: authorize URL endpoint, callback handler, token refresh
+- [x] API key and connection string storage (encrypted)
+- [x] Google OAuth connector (Gmail + Sheets) — first provider
+- [x] Connectors listing endpoint (GET /api/connectors)
+- [x] Migration and 15 tests (80 total backend tests passing)
 
 ---
 
 ## Phase 2: Execution Engine
 
-### Step 7: Node Registry and Engine
+### Step 7: Node Registry and Engine (partial)
 
+- [x] Executor framework (`app/engine/`): BaseNodeExecutor ABC, registry, runner
+- [x] Topological sort (Kahn's algorithm) for dependency resolution
+- [x] Data propagation between nodes (predecessor outputs → successor inputs)
+- [x] Node executors: manual_trigger, send_email (Gmail API), write_spreadsheet (Sheets API)
+- [x] Google API helpers: credential lookup, 401-retry with token refresh
+- [x] `POST /run` endpoint on workflow router (synchronous execution)
+- [x] Node executors: http_request (SSRF protection), send_notification, transform (map/pick/filter/json_parse), condition (10 operators)
+- [x] Branching execution: runner tracks inactive edges via source_handle, skips unreachable branches, propagates unreachability
+- [x] 23 engine tests (topo sort, all executors, branching runner, endpoint)
 - [ ] Node registry with Pydantic config/input/output models per type
 - [ ] Node metadata API (`/api/nodes`)
-- [ ] Node executors: manual_trigger, email_trigger, http_request, send_email, write_spreadsheet, send_notification, transform, condition
-- [ ] Topological dependency resolution and cycle detection
-- [ ] Branching execution (if/else, parallel)
-- [ ] Data propagation between nodes
-- [ ] Tests (mocked external calls)
+- [ ] Remaining executor: email_trigger (polling — deferred to Celery step)
 
 ### Step 8: Execution Persistence
 
@@ -128,20 +134,23 @@ _Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integ
 - [ ] Custom role editor
 - [x] Vue Router with auth guards, Pinia stores
 
-### Step 12: Visual Workflow Editor
+### Step 12: Visual Workflow Editor (partial)
 
-- [ ] Workflow list page (filtered by permissions)
-- [ ] Editor canvas (Vue Flow) with pan/zoom
-- [ ] Node palette sidebar (from backend registry)
-- [ ] Drag-and-drop, edge creation/deletion
-- [ ] Node config forms (auto-generated from schema)
-- [ ] Connection selector in node config
+- [x] Workflow list page (filtered by permissions)
+- [x] Editor canvas (Vue Flow) with pan/zoom
+- [x] Node palette sidebar (from backend registry)
+- [x] Drag-and-drop, edge creation/deletion
+- [x] Node config forms (per-type: schedule, condition, loop, parallel, etc.)
+- [x] Connection selector in node config (dynamic — derived from connector registry, not hardcoded)
+- [x] Save/load, auto-save indicator
+- [x] Run button with execution results panel
 - [ ] Branching visualization
-- [ ] Save/load, unsaved-change indicator
+- [x] Node-to-provider mapping derived from backend connector registry (strategy pattern — new connectors auto-appear)
+- [ ] Node config forms auto-generated from schema (currently hand-built per type)
 
-### Step 13: Execution Monitoring UI
+### Step 13: Execution Monitoring UI (partial)
 
-- [ ] Run workflow action
+- [x] Run workflow action (editor Run button → synchronous execution → results panel)
 - [ ] Execution list and detail pages
 - [ ] Node status display and input/output inspector
 - [ ] Error display, polling for updates
@@ -157,12 +166,15 @@ _Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integ
 - [ ] Admin platform stats (connections, users, storage)
 - [ ] Audit log viewer
 
-### Step 15: Connections UI
+### Step 15: Connections UI (partial)
 
-- [ ] Connections page (list, status indicators)
-- [ ] OAuth connect flow (Google, Slack, Microsoft)
+- [x] Connections page (list connected accounts, available/coming-soon integrations)
+- [x] OAuth connect flow (Google Gmail, Google Sheets)
+- [x] OAuth callback page with error handling
+- [x] Connection test and disconnect buttons
+- [x] Frontend slug alignment (google_gmail matches backend)
 - [ ] API key and connection string forms
-- [ ] Connection test and usage display
+- [ ] OAuth connect flow (Slack, Microsoft)
 
 ### Step 16: Documentation and CI/CD
 
@@ -177,7 +189,7 @@ _Last updated: 2026-11-27 (Steps 1–5 complete, workflow storage + editor integ
 
 | Decision | Status | Choice |
 |---|---|---|
-| Authentication | ✅ | In-memory access token (15 min) + httpOnly cookie refresh token (30 days) |
+| Authentication | ✅ | RS256 JWT, in-memory access token (15 min) + httpOnly cookie refresh token (30 days), server-side revocation via Redis |
 | Permission model | ✅ | System roles (admin/member) + custom roles, folder/tag scoping |
 | Deployment model | ✅ | Multi-tenant SaaS |
 | Integration auth | ✅ | OAuth first, API keys as fallback |

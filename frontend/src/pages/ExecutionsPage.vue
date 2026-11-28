@@ -36,7 +36,7 @@ const statusConfig = {
       <div
         v-for="execution in executions"
         :key="execution.id"
-        class="flex items-center justify-between p-4 transition-colors hover:bg-accent hover:text-accent-foreground"
+        class="flex items-center justify-between p-4 transition-colors hover:bg-muted"
       >
         <div class="flex items-center gap-3">
           <div :class="['rounded-md p-2', statusConfig[execution.status].bg]">

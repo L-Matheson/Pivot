@@ -1,12 +1,16 @@
 // @ts-nocheck — VueFlow generics cause TS2589 deep recursion with vue-tsc
 import { ref, computed, watch, type Ref } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useVueFlow, type Node, type Edge } from '@vue-flow/core'
 import { useWorkflow, useUpdateWorkflow } from '@/composables/useWorkflows'
+import { runWorkflow } from '@/services/api/executions'
 import { SLUG_TO_COMPONENT, SLUG_TO_LABEL } from '@/features/workflows/registry'
+import type { WorkflowRunResponse } from '@/types/execution'
 
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export function useWorkflowEditor(workspaceId: Ref<string>, workflowId: Ref<string>) {
+  const queryClient = useQueryClient()
   const { data: workflow, isLoading } = useWorkflow(workspaceId, workflowId)
   const updateMutation = useUpdateWorkflow(workspaceId, workflowId)
 
@@ -123,6 +127,39 @@ export function useWorkflowEditor(workspaceId: Ref<string>, workflowId: Ref<stri
       if (saveVersion === version) {
         autoSaveStatus.value = 'error'
       }
+    }
+  }
+
+  // execution
+
+  const isRunning = ref(false)
+  const runResult = ref<WorkflowRunResponse | null>(null)
+  const runError = ref<string | null>(null)
+
+  async function executeRun() {
+    flushSave()
+    // wait for any in-flight save to complete
+    if (autoSaveStatus.value === 'saving') {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(autoSaveStatus, (val) => {
+          if (val !== 'saving') {
+            unwatch()
+            resolve()
+          }
+        })
+      })
+    }
+
+    isRunning.value = true
+    runResult.value = null
+    runError.value = null
+    try {
+      runResult.value = await runWorkflow(workspaceId.value, workflowId.value)
+      queryClient.invalidateQueries({ queryKey: ['executions', workspaceId.value, workflowId.value] })
+    } catch (err: unknown) {
+      runError.value = err instanceof Error ? err.message : 'Execution failed.'
+    } finally {
+      isRunning.value = false
     }
   }
 
@@ -272,11 +309,15 @@ export function useWorkflowEditor(workspaceId: Ref<string>, workflowId: Ref<stri
     editingName,
     workflowName,
     autoSaveStatus,
+    isRunning,
+    runResult,
+    runError,
     // actions
     goBack: flushSave,
     startEditName,
     finishEditName,
     saveWorkflow,
+    executeRun,
     onNodeClick,
     onPaneClick,
     onDrop,

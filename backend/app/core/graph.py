@@ -34,6 +34,31 @@ def detect_cycles(edges: list[tuple[str, str]]) -> bool:
     return any(color[n] == WHITE and dfs(n) for n in nodes)
 
 
+def topological_sort(node_ids: list[str], edges: list[tuple[str, str]]) -> list[str]:
+    """Return *node_ids* in dependency order (Kahn's algorithm).
+
+    Every id in *node_ids* appears exactly once in the result, including
+    nodes with no edges.  The graph must be acyclic — call after
+    ``validate_definition`` confirms that.
+    """
+    in_degree: dict[str, int] = {nid: 0 for nid in node_ids}
+    adjacency: dict[str, list[str]] = defaultdict(list)
+    for src, tgt in edges:
+        adjacency[src].append(tgt)
+        in_degree[tgt] = in_degree.get(tgt, 0) + 1
+
+    queue = [nid for nid in node_ids if in_degree[nid] == 0]
+    result: list[str] = []
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for neighbor in adjacency[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+    return result
+
+
 def validate_definition(definition: WorkflowDefinition) -> list[str]:
     """Validate a workflow definition and return a list of error messages (empty if valid)."""
     errors: list[str] = []

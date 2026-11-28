@@ -48,8 +48,8 @@ function isActive(routeName: string) {
 
 // actions
 
-function handleLogout() {
-  auth.logout()
+async function handleLogout() {
+  await auth.logout()
   workspaceStore.clear()
   router.push('/login')
 }
@@ -103,7 +103,7 @@ watch(
             'group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors',
             isActive(item.name)
               ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-              : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+              : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
           ]"
         >
           <component

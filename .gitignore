@@ -11,3 +11,5 @@ dist/
 
 # Env
 .env
+.claude/skills/oauth2-authentication/SKILL.md
+.claude/skills/oauth2-authentication/.skillfish.json

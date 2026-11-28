@@ -108,7 +108,7 @@ function openWorkflow(workflowId: string) {
         class="text-left"
         @click="openWorkflow(workflow.id)"
       >
-        <UiCard class="group p-4 transition-colors hover:bg-accent hover:text-accent-foreground">
+        <UiCard class="group p-4 transition-colors hover:border-primary">
           <div class="flex items-start justify-between">
             <div class="flex items-center gap-3">
               <div class="rounded-md bg-primary/10 p-2">

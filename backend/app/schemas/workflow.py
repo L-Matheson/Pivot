@@ -77,3 +77,22 @@ class WorkflowListItem(BaseModel):
     tags: list[str]
     created_by: uuid.UUID
     updated_at: datetime
+
+
+# --- Execution response schemas ---
+
+
+class NodeResultSchema(BaseModel):
+    node_id: str
+    status: str
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    duration_ms: int = 0
+
+
+class WorkflowRunResponse(BaseModel):
+    execution_id: uuid.UUID
+    status: str
+    node_results: list[NodeResultSchema]
+    started_at: datetime
+    finished_at: datetime

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token, hash_password
 from app.models.user import User
 
@@ -57,7 +58,10 @@ def test_register_short_password(client: TestClient) -> None:
 # --- login ---
 
 
-def test_login_success(client: TestClient, session: MagicMock) -> None:
+@patch("app.api.auth.routes.store_refresh_token")
+def test_login_success(
+    mock_store: MagicMock, client: TestClient, session: MagicMock,
+) -> None:
     user = _make_user(password="correctpassword")
     session.exec.return_value.first.return_value = user
 
@@ -73,6 +77,7 @@ def test_login_success(client: TestClient, session: MagicMock) -> None:
     assert "refresh_token" not in data
 
     assert "pivot_refresh" in response.cookies
+    mock_store.assert_called_once()
 
 
 def test_login_wrong_password(client: TestClient, session: MagicMock) -> None:
@@ -100,9 +105,18 @@ def test_login_unknown_email(client: TestClient, session: MagicMock) -> None:
 # --- refresh ---
 
 
-def test_refresh_success(client: TestClient, session: MagicMock) -> None:
+@patch("app.api.auth.routes.store_refresh_token")
+@patch("app.api.auth.routes.revoke_refresh_token")
+@patch("app.api.auth.routes.is_refresh_token_valid", return_value=True)
+def test_refresh_success(
+    mock_valid: MagicMock,
+    mock_revoke: MagicMock,
+    mock_store: MagicMock,
+    client: TestClient,
+    session: MagicMock,
+) -> None:
     user = _make_user()
-    refresh = create_refresh_token(str(user.id))
+    refresh, jti = create_refresh_token(str(user.id))
     session.get.return_value = user
 
     client.cookies.set("pivot_refresh", refresh, path="/api/auth")
@@ -112,6 +126,8 @@ def test_refresh_success(client: TestClient, session: MagicMock) -> None:
     assert "access_token" in data
     assert "expires_in" in data
     assert "pivot_refresh" in response.cookies
+    mock_revoke.assert_called_once_with(jti)
+    mock_store.assert_called_once()
 
 
 def test_refresh_with_access_token_rejected(client: TestClient, session: MagicMock) -> None:
@@ -126,6 +142,19 @@ def test_refresh_with_access_token_rejected(client: TestClient, session: MagicMo
 def test_refresh_missing_cookie(client: TestClient) -> None:
     response = client.post("/api/auth/refresh")
     assert response.status_code == 401
+
+
+@patch("app.api.auth.routes.is_refresh_token_valid", return_value=False)
+def test_refresh_revoked_token(
+    mock_valid: MagicMock, client: TestClient, session: MagicMock,
+) -> None:
+    user = _make_user()
+    refresh, _jti = create_refresh_token(str(user.id))
+
+    client.cookies.set("pivot_refresh", refresh, path="/api/auth")
+    response = client.post("/api/auth/refresh")
+    assert response.status_code == 401
+    assert "revoked" in response.json()["detail"].lower()
 
 
 # --- logout ---
@@ -156,8 +185,9 @@ def test_me_no_token(client: TestClient) -> None:
 
 def test_me_expired_token(client: TestClient) -> None:
     with patch("app.core.security.settings") as mock_settings:
-        mock_settings.secret_key = "change-me-in-production-use-a-random-secret"
-        mock_settings.jwt_algorithm = "HS256"
+        mock_settings.jwt_algorithm = settings.jwt_algorithm
+        mock_settings.jwt_signing_key = settings.jwt_signing_key
+        mock_settings.jwt_verifying_key = settings.jwt_verifying_key
         mock_settings.jwt_issuer = "pivot"
         mock_settings.jwt_audience = "pivot"
         mock_settings.access_token_expire_minutes = -1

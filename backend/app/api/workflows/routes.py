@@ -6,8 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 
 from app.core.auth import CurrentUserDep, PermissionRequired
+from app.core.config import settings
 from app.core.db import SessionDep
 from app.core.graph import validate_definition
+from app.engine import run_workflow
+from app.engine.base import ExecutionContext
 from app.models.base import utc_now
 from app.models.workflow import Workflow
 from app.schemas.workflow import (
@@ -15,6 +18,7 @@ from app.schemas.workflow import (
     WorkflowDefinition,
     WorkflowListItem,
     WorkflowRead,
+    WorkflowRunResponse,
     WorkflowUpdate,
 )
 
@@ -189,3 +193,54 @@ def delete_workflow(
 
     session.delete(workflow)
     session.commit()
+
+
+@router.post(
+    "/{workflow_id}/run",
+    dependencies=[Depends(PermissionRequired("automations", "edit"))],
+)
+def run_workflow_endpoint(
+    workspace_id: uuid.UUID,
+    workflow_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUserDep,
+) -> WorkflowRunResponse:
+    workflow = session.get(Workflow, workflow_id)
+    if workflow is None or workflow.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow not found.",
+        )
+
+    definition = WorkflowDefinition.model_validate(workflow.definition)
+    errors = validate_definition(definition)
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"validation_errors": errors},
+        )
+
+    ctx = ExecutionContext(
+        workspace_id=workspace_id,
+        user_id=user.id,
+        session=session,
+        encryption_key=settings.encryption_key,
+    )
+    result = run_workflow(definition, ctx, workflow_id=workflow_id)
+
+    return WorkflowRunResponse(
+        execution_id=result.execution_id,
+        status=result.status,
+        node_results=[
+            {
+                "node_id": nr.node_id,
+                "status": nr.status,
+                "output": nr.output,
+                "error": nr.error,
+                "duration_ms": nr.duration_ms,
+            }
+            for nr in result.node_results
+        ],
+        started_at=result.started_at,
+        finished_at=result.finished_at,
+    )

@@ -17,6 +17,11 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.token_store import (
+    is_refresh_token_valid,
+    revoke_refresh_token,
+    store_refresh_token,
+)
 from app.models.user import User
 from app.schemas.auth import (
     AccessTokenResponse,
@@ -67,7 +72,8 @@ def login(body: LoginRequest, session: SessionDep, response: Response) -> Access
         raise credentials_error
 
     access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
+    refresh_token, jti = create_refresh_token(str(user.id))
+    store_refresh_token(jti, str(user.id))
     set_refresh_cookie(response, refresh_token)
 
     return AccessTokenResponse(
@@ -104,6 +110,13 @@ def refresh(request: Request, session: SessionDep, response: Response) -> Access
             detail="Expected a refresh token.",
         )
 
+    jti = payload.get("jti")
+    if not jti or not is_refresh_token_valid(jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked.",
+        )
+
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(
@@ -126,8 +139,11 @@ def refresh(request: Request, session: SessionDep, response: Response) -> Access
             detail="User not found or deactivated.",
         )
 
+    revoke_refresh_token(jti)
+
     new_access = create_access_token(str(user.id))
-    new_refresh = create_refresh_token(str(user.id))
+    new_refresh, new_jti = create_refresh_token(str(user.id))
+    store_refresh_token(new_jti, str(user.id))
     set_refresh_cookie(response, new_refresh)
 
     return AccessTokenResponse(
@@ -137,7 +153,16 @@ def refresh(request: Request, session: SessionDep, response: Response) -> Access
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> None:
+def logout(request: Request, response: Response) -> None:
+    token = request.cookies.get(settings.cookie_name_refresh)
+    if token:
+        try:
+            payload = decode_token(token)
+            jti = payload.get("jti")
+            if jti:
+                revoke_refresh_token(jti)
+        except jwt.PyJWTError:
+            pass
     clear_refresh_cookie(response)
 
 
